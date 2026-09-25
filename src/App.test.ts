@@ -209,4 +209,62 @@ describe('PeerBox App Component', () => {
     unmount(component);
     target.remove();
   });
+
+  it('sends and receives messages in room with recipient targeting', async () => {
+    window.history.replaceState({}, '', '/cute-dog');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('peer-1');
+    const transport2 = new InMemoryTransport('peer-2');
+
+    const component = mount(App, { target, props: { transport: transport1 } });
+
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    // Peer 2 joins
+    await transport2.joinRoom({ roomId: 'cute-dog' });
+    flushSync();
+
+    // Compose broadcast message
+    const msgInput = target.querySelector<HTMLTextAreaElement>('[data-testid="message-input"]')!;
+    const sendBtn = target.querySelector<HTMLButtonElement>('[data-testid="send-btn"]')!;
+    expect(msgInput).not.toBeNull();
+
+    msgInput.value = 'Hello peer!';
+    msgInput.dispatchEvent(new Event('input'));
+    flushSync();
+
+    sendBtn.click();
+    flushSync();
+
+    expect(target.querySelectorAll('[data-testid="message-item"]').length).toBe(1);
+    expect(target.querySelector('[data-testid="message-item"]')?.textContent).toContain(
+      'Hello peer!',
+    );
+
+    // Now select peer-2 as direct recipient
+    const recipientSelect = target.querySelector<HTMLSelectElement>(
+      '[data-testid="recipient-select"]',
+    )!;
+    expect(recipientSelect).not.toBeNull();
+    recipientSelect.value = 'peer-2';
+    recipientSelect.dispatchEvent(new Event('change'));
+    flushSync();
+
+    msgInput.value = 'Whisper to peer-2';
+    msgInput.dispatchEvent(new Event('input'));
+    flushSync();
+
+    sendBtn.click();
+    flushSync();
+
+    const messages = target.querySelectorAll('[data-testid="message-item"]');
+    expect(messages.length).toBe(2);
+    expect(messages[1].textContent).toContain('Whisper to peer-2');
+    expect(messages[1].textContent).toContain('Private');
+
+    unmount(component);
+    target.remove();
+  });
 });

@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
+  import { ChatService } from './lib/chat/chat-service';
+  import {
+    createMessageStore,
+    getPersistencePreference,
+    setPersistencePreference,
+    type ChatMessage,
+  } from './lib/chat/message-store';
   import { generatePersona, setStoredNickname, type Persona } from './lib/persona/persona';
   import { generateRoomName, sanitizeRoomName } from './lib/room/name-generator';
   import { buildRoomUrl, parseRoomLocation } from './lib/room/url';
@@ -32,6 +39,14 @@
   let isChangingKey = $state(false);
   let newKeyInput = $state('');
 
+  // Chat State
+  let chatService: ChatService | null = null;
+  let messages = $state<ChatMessage[]>([]);
+  let chatInput = $state('');
+  let selectedRecipientId = $state('everyone');
+  let isPersisted = $state(getPersistencePreference());
+  let messagesContainer: HTMLDivElement | null = $state(null);
+
   let unsubs: Array<() => void> = [];
 
   onMount(() => {
@@ -50,6 +65,9 @@
     unsubs.push(
       transport.onPeerLeave((peerId) => {
         connectedPeers = connectedPeers.filter((p) => p.id !== peerId);
+        if (selectedRecipientId === peerId) {
+          selectedRecipientId = 'everyone';
+        }
         if (connectedPeers.length === 0) {
           startAloneTimer();
         }
@@ -79,6 +97,7 @@
   onDestroy(() => {
     for (const u of unsubs) u();
     if (aloneTimer) clearTimeout(aloneTimer);
+    if (chatService) chatService.destroy();
   });
 
   function startAloneTimer() {
@@ -117,10 +136,29 @@
 
   async function join(roomId: string, roomKey: string | null, updateHistory = true) {
     try {
+      if (chatService) {
+        chatService.destroy();
+        chatService = null;
+      }
+
       await transport.joinRoom({ roomId, roomKey });
       currentRoomId = roomId;
       currentRoomKey = roomKey;
       connectedPeers = transport.getPeers();
+
+      // Initialize Chat Service
+      const store = createMessageStore(roomId, isPersisted);
+      chatService = new ChatService({
+        transport,
+        store,
+        persona: localPersona,
+      });
+      messages = chatService.getMessages();
+
+      chatService.onNewMessage((msg) => {
+        messages = [...messages, msg];
+        scrollToBottom();
+      });
 
       if (connectedPeers.length === 0) {
         startAloneTimer();
@@ -138,6 +176,11 @@
   }
 
   function leave(updateHistory = true) {
+    if (chatService) {
+      chatService.destroy();
+      chatService = null;
+    }
+
     transport.leaveRoom();
     currentRoomId = null;
     currentRoomKey = null;
@@ -145,6 +188,7 @@
     inputRoomKey = '';
     errorMessage = null;
     connectedPeers = [];
+    messages = [];
     resetAloneTimer();
 
     if (updateHistory && typeof window !== 'undefined') {
@@ -165,6 +209,9 @@
         ...localPersona,
         name: clean,
       };
+      if (chatService) {
+        chatService.setPersona(localPersona);
+      }
       const customTransport = transport as unknown as { setPersona?: (p: Persona) => void };
       if (typeof customTransport.setPersona === 'function') {
         customTransport.setPersona(localPersona);
@@ -187,6 +234,68 @@
     const updatedKey = newKeyInput.trim() || null;
     isChangingKey = false;
     await join(currentRoomId, updatedKey, true);
+  }
+
+  function togglePersistence() {
+    isPersisted = !isPersisted;
+    setPersistencePreference(isPersisted);
+    if (currentRoomId) {
+      // Recreate store with new persistence mode
+      const store = createMessageStore(currentRoomId, isPersisted);
+      if (chatService) {
+        chatService.destroy();
+      }
+      chatService = new ChatService({
+        transport,
+        store,
+        persona: localPersona,
+      });
+      messages = chatService.getMessages();
+      chatService.onNewMessage((msg) => {
+        messages = [...messages, msg];
+        scrollToBottom();
+      });
+    }
+  }
+
+  function handleSendMessage() {
+    const text = chatInput.trim();
+    if (!text || !chatService) return;
+
+    let targetRecipient: { id: string; name?: string } | null = null;
+    if (selectedRecipientId !== 'everyone') {
+      const peer = connectedPeers.find((p) => p.id === selectedRecipientId);
+      targetRecipient = {
+        id: selectedRecipientId,
+        name: peer?.name || selectedRecipientId,
+      };
+    }
+
+    try {
+      chatService.sendMessage(text, targetRecipient);
+      chatInput = '';
+      scrollToBottom();
+    } catch {
+      // Silent error handling for empty sends
+    }
+  }
+
+  function handleChatKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  }
+
+  async function scrollToBottom() {
+    await tick();
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  }
+
+  function formatTimestamp(ts: number): string {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 </script>
 
@@ -290,6 +399,18 @@
             </span>
             <span class="persona-name">{localPersona.name}</span>
             <span class="persona-edit-icon">✏️</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-secondary btn-icon-persist"
+            data-testid="persist-toggle-btn"
+            onclick={togglePersistence}
+            title={isPersisted
+              ? 'Local chat persistence is ON (Saved in browser)'
+              : 'Chat is ephemeral (Memory only)'}
+          >
+            {isPersisted ? '💾 Persist: On' : '🧹 Ephemeral'}
           </button>
 
           <button
@@ -413,23 +534,81 @@
         </div>
       </div>
 
-      <div class="room-body">
-        {#if connectedPeers.length === 0}
-          <div class="waiting-card">
-            <div class="waiting-pulse"></div>
-            <p class="waiting-title">Waiting for peers to connect...</p>
-            <p class="waiting-subtitle">
-              Share this room URL with someone to begin direct, encrypted messaging and transfers.
+      <!-- Chat Timeline & Messages -->
+      <div class="chat-timeline" bind:this={messagesContainer} data-testid="chat-timeline">
+        {#if messages.length === 0}
+          <div class="empty-timeline">
+            <p class="empty-title">Room conversation started</p>
+            <p class="empty-subtitle">
+              Messages and files sent here are end-to-end encrypted directly between peers.
             </p>
           </div>
         {:else}
-          <div class="chat-placeholder">
-            <p class="chat-placeholder-text">
-              ✨ Connected to {connectedPeers.length} peer{connectedPeers.length > 1 ? 's' : ''}.
-              Ready for real-time messaging.
-            </p>
-          </div>
+          {#each messages as msg (msg.id)}
+            {@const isSelf = msg.senderId === transport.localPeerId}
+            <div class="message-wrapper" class:message-self={isSelf} data-testid="message-item">
+              <div class="message-meta">
+                {#if !isSelf}
+                  <span class="sender-avatar" style:background-color={msg.senderColor}>
+                    {msg.senderEmoji}
+                  </span>
+                  <span class="sender-name">{msg.senderName}</span>
+                {/if}
+                <span class="message-time">{formatTimestamp(msg.timestamp)}</span>
+                {#if msg.isPrivate}
+                  <span class="badge badge-private">
+                    🔒 Private {isSelf && msg.recipientName ? `to ${msg.recipientName}` : ''}
+                  </span>
+                {/if}
+              </div>
+
+              <div class="message-bubble" class:bubble-self={isSelf}>
+                <p class="message-text">{msg.content}</p>
+              </div>
+            </div>
+          {/each}
         {/if}
+      </div>
+
+      <!-- Composer & Recipient Selector -->
+      <div class="composer-container">
+        <div class="composer-toolbar">
+          <div class="recipient-selector-wrapper">
+            <span class="recipient-label">Send to:</span>
+            <select
+              class="recipient-select"
+              data-testid="recipient-select"
+              bind:value={selectedRecipientId}
+            >
+              <option value="everyone">🌐 Everyone</option>
+              {#each connectedPeers as peer (peer.id)}
+                <option value={peer.id}>
+                  🔒 {peer.name || peer.id}
+                </option>
+              {/each}
+            </select>
+          </div>
+        </div>
+
+        <div class="composer-input-row">
+          <textarea
+            class="composer-textarea"
+            data-testid="message-input"
+            placeholder="Type a message... (Press Enter to send, Shift+Enter for new line)"
+            rows="1"
+            bind:value={chatInput}
+            onkeydown={handleChatKeydown}></textarea>
+
+          <button
+            type="button"
+            class="btn-primary btn-send"
+            data-testid="send-btn"
+            onclick={handleSendMessage}
+            disabled={!chatInput.trim()}
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   {/if}
@@ -447,11 +626,18 @@
     border: 1px solid var(--card-border);
     backdrop-filter: blur(20px);
     border-radius: 1.25rem;
-    padding: 2.5rem;
+    padding: 2.25rem;
     width: 100%;
     box-shadow:
       0 20px 25px -5px rgba(0, 0, 0, 0.45),
       0 8px 10px -6px rgba(0, 0, 0, 0.35);
+  }
+
+  .room-card {
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 580px;
   }
 
   .header {
@@ -529,7 +715,8 @@
   }
 
   input[type='text'],
-  input[type='password'] {
+  input[type='password'],
+  .composer-textarea {
     width: 100%;
     padding: 0.75rem 1rem;
     background: rgba(15, 23, 42, 0.6);
@@ -541,7 +728,8 @@
     transition: all 0.15s ease;
   }
 
-  input:focus {
+  input:focus,
+  .composer-textarea:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
@@ -561,9 +749,14 @@
     transition: all 0.2s ease;
   }
 
-  .btn-primary:hover {
+  .btn-primary:hover:not(:disabled) {
     background-color: var(--primary-hover);
     transform: translateY(-1px);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .btn-secondary {
@@ -591,6 +784,11 @@
 
   .btn-block {
     width: 100%;
+  }
+
+  .btn-icon-persist {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.75rem;
   }
 
   .error-banner {
@@ -624,8 +822,8 @@
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--card-border);
-    padding-bottom: 1.25rem;
-    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .room-meta {
@@ -638,7 +836,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.2rem;
   }
 
   .room-tag {
@@ -650,7 +848,7 @@
   }
 
   .room-title {
-    font-size: 1.35rem;
+    font-size: 1.25rem;
     font-weight: 700;
   }
 
@@ -673,10 +871,18 @@
     border: 1px solid rgba(148, 163, 184, 0.3);
   }
 
+  .badge-private {
+    background: rgba(236, 72, 153, 0.15);
+    color: #f472b6;
+    border: 1px solid rgba(236, 72, 153, 0.3);
+    font-size: 0.625rem;
+    padding: 0.1rem 0.4rem;
+  }
+
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 
   .persona-badge {
@@ -700,13 +906,13 @@
   }
 
   .persona-avatar {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.35rem;
+    height: 1.35rem;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
   }
 
   .persona-name {
@@ -723,11 +929,11 @@
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
-    padding: 0.85rem 1rem;
+    padding: 0.75rem 1rem;
     background: rgba(245, 158, 11, 0.12);
     border: 1px solid rgba(245, 158, 11, 0.3);
     border-radius: 0.75rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     color: #fcd34d;
     font-size: 0.8125rem;
   }
@@ -747,10 +953,10 @@
   .presence-bar {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.625rem 0;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
     border-bottom: 1px solid var(--card-border);
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     font-size: 0.8125rem;
   }
 
@@ -762,14 +968,14 @@
   .peers-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.4rem;
   }
 
   .peer-pill {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.25rem 0.65rem;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--card-border);
     border-radius: 9999px;
@@ -781,8 +987,8 @@
   }
 
   .peer-dot {
-    width: 0.5rem;
-    height: 0.5rem;
+    width: 0.45rem;
+    height: 0.45rem;
     border-radius: 50%;
   }
 
@@ -791,62 +997,144 @@
     font-weight: 500;
   }
 
-  .waiting-card {
-    text-align: center;
-    padding: 3.5rem 1.5rem;
-    background: rgba(15, 23, 42, 0.4);
-    border: 1px dashed var(--card-border);
-    border-radius: 0.75rem;
+  .chat-timeline {
+    flex: 1;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    gap: 0.85rem;
+    padding: 0.5rem 0.25rem 1rem 0;
+    min-height: 280px;
+    max-height: 380px;
   }
 
-  .waiting-pulse {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    background: rgba(99, 102, 241, 0.2);
-    border: 2px solid var(--primary);
-    margin-bottom: 1.25rem;
-    animation: pulse 2s infinite ease-in-out;
+  .empty-timeline {
+    margin: auto;
+    text-align: center;
+    padding: 2rem 1rem;
   }
 
-  @keyframes pulse {
-    0% {
-      transform: scale(0.9);
-      box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.5);
-    }
-    70% {
-      transform: scale(1.05);
-      box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
-    }
-    100% {
-      transform: scale(0.9);
-      box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
-    }
-  }
-
-  .waiting-title {
+  .empty-title {
     font-weight: 600;
+    color: var(--text-main);
     margin-bottom: 0.25rem;
   }
 
-  .waiting-subtitle {
-    font-size: 0.875rem;
+  .empty-subtitle {
+    font-size: 0.8125rem;
     color: var(--text-muted);
-    max-width: 400px;
+    max-width: 320px;
   }
 
-  .chat-placeholder {
-    padding: 2.5rem 1.5rem;
-    text-align: center;
-    background: rgba(15, 23, 42, 0.3);
-    border-radius: 0.75rem;
+  .message-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-width: 82%;
   }
 
-  .chat-placeholder-text {
+  .message-self {
+    align-self: flex-end;
+  }
+
+  .message-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+  }
+
+  .sender-avatar {
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.625rem;
+  }
+
+  .sender-name {
+    font-weight: 600;
     color: var(--text-main);
+  }
+
+  .message-bubble {
+    padding: 0.65rem 0.95rem;
+    background: rgba(30, 41, 59, 0.75);
+    border: 1px solid var(--card-border);
+    border-radius: 0.875rem;
+    color: var(--text-main);
+    word-break: break-word;
+    line-height: 1.45;
+    font-size: 0.875rem;
+  }
+
+  .bubble-self {
+    background: #4f46e5;
+    border-color: #6366f1;
+    color: #ffffff;
+  }
+
+  .message-text {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  .composer-container {
+    border-top: 1px solid var(--card-border);
+    padding-top: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .composer-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .recipient-selector-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .recipient-select {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid var(--card-border);
+    border-radius: 0.5rem;
+    color: var(--text-main);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  .recipient-select:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+
+  .composer-input-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .composer-textarea {
+    resize: none;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.875rem;
+    height: 42px;
+    max-height: 100px;
+  }
+
+  .btn-send {
+    padding: 0 1.25rem;
     font-size: 0.875rem;
   }
 
