@@ -8,12 +8,18 @@ describe('TrysteroTransport Adapter', () => {
     const sendMock = vi.fn();
 
     const mockRoom = {
-      onPeerJoin: vi.fn((cb) => {
+      get onPeerJoin() {
+        return peerJoinCb;
+      },
+      set onPeerJoin(cb) {
         peerJoinCb = cb;
-      }),
-      onPeerLeave: vi.fn((cb) => {
+      },
+      get onPeerLeave() {
+        return peerLeaveCb;
+      },
+      set onPeerLeave(cb) {
         peerLeaveCb = cb;
-      }),
+      },
       makeAction: vi.fn(() => ({
         send: sendMock,
         onMessage: null,
@@ -39,8 +45,8 @@ describe('TrysteroTransport Adapter', () => {
       'cute-dog',
     );
 
-    expect(mockRoom.onPeerJoin).toHaveBeenCalled();
-    expect(mockRoom.onPeerLeave).toHaveBeenCalled();
+    expect(mockRoom.onPeerJoin).toBeTypeOf('function');
+    expect(mockRoom.onPeerLeave).toBeTypeOf('function');
 
     // Verify peer join announcement
     const joinedPeers: string[] = [];

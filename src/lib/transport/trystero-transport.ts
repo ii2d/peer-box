@@ -8,8 +8,8 @@ interface TrysteroAction {
 }
 
 interface TrysteroRoom {
-  onPeerJoin: (cb: (peerId: string) => void) => void;
-  onPeerLeave: (cb: (peerId: string) => void) => void;
+  onPeerJoin?: ((peerId: string) => void) | null;
+  onPeerLeave?: ((peerId: string) => void) | null;
   makeAction: (
     name: string,
   ) =>
@@ -114,7 +114,7 @@ export class TrysteroTransport implements RoomTransport {
       }
     });
 
-    this.room.onPeerJoin((peerId: string) => {
+    const handlePeerJoin = (peerId: string) => {
       const peerInfo: PeerInfo = { id: peerId };
       this.peers.set(peerId, peerInfo);
 
@@ -133,18 +133,37 @@ export class TrysteroTransport implements RoomTransport {
       for (const listener of this.peerJoinListeners) {
         listener(peerInfo);
       }
-    });
+    };
 
-    this.room.onPeerLeave((peerId: string) => {
+    const rawJoin = this.room.onPeerJoin as unknown;
+    if (typeof rawJoin === 'function' && (rawJoin as (...args: unknown[]) => unknown).length > 0) {
+      (rawJoin as (cb: (peerId: string) => void) => void)(handlePeerJoin);
+    } else {
+      this.room.onPeerJoin = handlePeerJoin;
+    }
+
+    const handlePeerLeave = (peerId: string) => {
       this.peers.delete(peerId);
       for (const listener of this.peerLeaveListeners) {
         listener(peerId);
       }
-    });
+    };
+
+    const rawLeave = this.room.onPeerLeave as unknown;
+    if (
+      typeof rawLeave === 'function' &&
+      (rawLeave as (...args: unknown[]) => unknown).length > 0
+    ) {
+      (rawLeave as (cb: (peerId: string) => void) => void)(handlePeerLeave);
+    } else {
+      this.room.onPeerLeave = handlePeerLeave;
+    }
   }
 
   leaveRoom(): void {
     if (this.room) {
+      this.room.onPeerJoin = null;
+      this.room.onPeerLeave = null;
       try {
         this.room.leave();
       } catch {
