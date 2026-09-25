@@ -52,17 +52,21 @@ Signaling leverages Nostr relays (via standard secure WebSockets) with automatic
 ## Implementation Decisions
 
 ### Signaling & End-to-End Encryption
+
 - Primary matchmaking runs via Nostr relays over secure WebSockets (`wss://`), traversing enterprise firewalls that restrict torrent protocols. BitTorrent trackers serve as fallback (respects `docs/adr/0002-nostr-signaling-with-torrent-fallback.md`).
 - Room Keys are used directly as AES-GCM encryption keys for peer discovery and data encryption.
 - Room Keys in shared links remain exclusively in URL hash fragments (`#key=...`), ensuring they are never logged by GitHub Pages or web proxies (respects `docs/adr/0003-key-in-hash-fragment.md`).
 
 ### Testing Seam: `RoomTransport`
+
 The codebase organizes around a single deep seam at the transport layer:
+
 - **`RoomTransport` Interface**: Encapsulates room lifecycle, peer join/leave events, typed action messaging, telemetry polling, and binary chunk streaming.
 - **Production Adapter (`TrysteroTransport`)**: Bridges to Trystero Nostr/Torrent implementations and browser `RTCPeerConnection.getStats()`.
 - **Test Adapter (`InMemoryTransport`)**: In-memory event bus simulating connected virtual peers, latency stats, and chunk dispatch in Vitest.
 
 ### File Transfer Protocol, Streaming & Telemetry
+
 - Message payloads are segmented into metadata announcements (`file-meta`), binary data chunks (`file-chunk`), transfer acknowledgements (`file-ack`), and cancellations (`file-cancel`).
 - **Transfer Threshold**:
   - Files `< 25MB`: Automatically accepted and buffered into memory blobs for immediate rendering (image lightboxes, waveform audio, video players).
@@ -70,21 +74,25 @@ The codebase organizes around a single deep seam at the transport layer:
 - **Telemetry**: Throughput calculated via a 1-second Exponential Moving Average (EMA) window, with 500ms dual-sided acknowledgements synchronizing sender and receiver progress bars and dynamic ETA.
 
 ### Screen Grab Capture
+
 - Captures a single still video frame using `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })` drawn onto an offscreen canvas.
 - Immediately stops all media stream tracks upon frame capture, guaranteeing zero ongoing streaming overhead or background recording indicators.
 - Displays a floating preview tray above the message composer for review, recipient selection, and optional captioning before dispatch.
 
 ### WebRTC Connection Health & Zero-TURN Architecture
+
 - Operates with strict zero-TURN constraints (respects `docs/adr/0001-zero-turn-relay-architecture.md`).
 - Polls `RTCPeerConnection.getStats()` every 2–3s to extract active candidate-pair details (`host` for Direct LAN, `srflx` for Direct P2P via STUN, latency in ms).
 - Displays live latency pills and diagnostic guidance if symmetric NAT firewalls prevent a direct connection.
 
 ### Trust Guarantee & Privacy Presentation
+
 - Non-intrusive Trust Guarantee badges on the landing view: `🔒 End-to-End Encrypted`, `⚡ Direct P2P (No Servers)`, `🧹 Zero Logs & Cookies`.
 - Persistent in-room header button (`🛡️ Private & Ephemeral`) opening a modal with 4 visual summary cards: Zero Servers, Room Key Encryption, Ephemeral Memory, and Transparent Direct P2P Public IP Disclosure (respects `docs/adr/0004-transparent-webrtc-ip-disclosure.md`).
 - Expandable technical verification sections detailing Web Crypto AES-GCM, zero-knowledge URL hashes, and Nostr WSS signaling.
 
 ### SPA Routing & Deployment
+
 - GitHub Pages SPA routing using a `404.html` redirect script that maps `/cute-dog#key=...` through `/?p=/cute-dog#key=...` restored via `history.replaceState`.
 - Automated GitHub Actions workflow (`deploy.yml`) with:
   - `pnpm audit --audit-level=high`
