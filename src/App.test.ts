@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import App from './App.svelte';
 import {
@@ -109,6 +109,103 @@ describe('PeerBox App Component', () => {
     expect(transport.currentRoomId).toBe('cosmic-fox');
     expect(transport.currentRoomKey).toBe('topsecret');
 
+    unmount(component);
+    target.remove();
+  });
+
+  it('displays local persona and allows editing display nickname in-room', async () => {
+    window.history.replaceState({}, '', '/cute-dog');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('test-peer');
+    const component = mount(App, { target, props: { transport } });
+
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    const personaBadge = target.querySelector<HTMLButtonElement>('[data-testid="persona-badge"]');
+    expect(personaBadge).not.toBeNull();
+    personaBadge?.click();
+    flushSync();
+
+    const editInput = target.querySelector<HTMLInputElement>('[data-testid="nickname-edit-input"]');
+    expect(editInput).not.toBeNull();
+    editInput!.value = 'Captain Marvel';
+    editInput!.dispatchEvent(new Event('input'));
+    flushSync();
+
+    const saveBtn = target.querySelector<HTMLButtonElement>('[data-testid="nickname-save-btn"]');
+    saveBtn?.click();
+    flushSync();
+
+    expect(target.querySelector('[data-testid="persona-badge"]')?.textContent).toContain(
+      'Captain Marvel',
+    );
+    expect(localStorage.getItem('peerbox_persona_nickname')).toBe('Captain Marvel');
+
+    unmount(component);
+    target.remove();
+  });
+
+  it('renders live connected peers list when a remote peer arrives', async () => {
+    window.history.replaceState({}, '', '/cute-dog');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('peer-local');
+    const transport2 = new InMemoryTransport('peer-remote');
+    const component = mount(App, { target, props: { transport: transport1 } });
+
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    expect(target.querySelectorAll('[data-testid="peer-item"]').length).toBe(0);
+
+    // Remote peer joins
+    await transport2.joinRoom({ roomId: 'cute-dog' });
+    flushSync();
+
+    expect(target.querySelectorAll('[data-testid="peer-item"]').length).toBe(1);
+    expect(target.querySelector('[data-testid="peer-item"]')?.textContent).toContain('peer-remote');
+
+    // Remote peer leaves
+    transport2.leaveRoom();
+    flushSync();
+
+    expect(target.querySelectorAll('[data-testid="peer-item"]').length).toBe(0);
+
+    unmount(component);
+    target.remove();
+  });
+
+  it('displays diagnostic banner with change room key button when alone for 10 seconds', async () => {
+    vi.useFakeTimers();
+    window.history.replaceState({}, '', '/cute-dog#key=wrong-key');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('peer-alone');
+    const component = mount(App, { target, props: { transport } });
+
+    await vi.advanceTimersByTimeAsync(10);
+    flushSync();
+
+    expect(target.querySelector('[data-testid="alone-diagnostic"]')).toBeNull();
+
+    // Advance by 10 seconds
+    await vi.advanceTimersByTimeAsync(10000);
+    flushSync();
+
+    expect(target.querySelector('[data-testid="alone-diagnostic"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="change-key-btn"]')).not.toBeNull();
+
+    // Clicking Change Room Key opens change key modal
+    const changeKeyBtn = target.querySelector<HTMLButtonElement>('[data-testid="change-key-btn"]');
+    changeKeyBtn?.click();
+    flushSync();
+
+    expect(target.querySelector('[data-testid="change-key-input"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="save-new-key-btn"]')).not.toBeNull();
+
+    vi.useRealTimers();
     unmount(component);
     target.remove();
   });

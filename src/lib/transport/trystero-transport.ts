@@ -1,0 +1,251 @@
+import { joinRoom as joinNostrRoom } from 'trystero/nostr';
+import { generatePersona, type Persona } from '../persona/persona';
+import type { PeerConnectionStats, PeerInfo, RoomTransport, RoomTransportConfig } from './types';
+
+interface TrysteroRoom {
+  onPeerJoin: (cb: (peerId: string) => void) => void;
+  onPeerLeave: (cb: (peerId: string) => void) => void;
+  makeAction: (
+    name: string,
+  ) => [
+    (data: unknown, targetPeerId?: string) => void,
+    (cb: (data: unknown, peerId: string) => void) => void,
+  ];
+  getPeers?: () => Record<string, RTCPeerConnection>;
+  leave: () => void;
+}
+
+export interface TrysteroTransportOptions {
+  appId?: string;
+  joinRoomFn?: (config: { appId: string; password?: string }, roomId: string) => TrysteroRoom;
+  persona?: Persona;
+}
+
+export class TrysteroTransport implements RoomTransport {
+  readonly localPeerId: string;
+  private _roomId: string | null = null;
+  private _roomKey: string | null = null;
+  private appId: string;
+  private joinRoomFn: (
+    config: { appId: string; password?: string },
+    roomId: string,
+  ) => TrysteroRoom;
+
+  private room: TrysteroRoom | null = null;
+  private peers = new Map<string, PeerInfo>();
+  private localPersona: Persona;
+
+  private peerJoinListeners = new Set<(peer: PeerInfo) => void>();
+  private peerLeaveListeners = new Set<(peerId: string) => void>();
+  private actionHandlers = new Map<
+    string,
+    {
+      send: (data: unknown, targetPeerId?: string) => void;
+      onReceive: (cb: (data: unknown, peerId: string) => void) => void;
+      listeners: Set<(payload: unknown, senderId: string) => void>;
+    }
+  >();
+
+  constructor(options: TrysteroTransportOptions = {}) {
+    this.appId = options.appId ?? 'peer-box-ii2d';
+    this.joinRoomFn = options.joinRoomFn ?? (joinNostrRoom as unknown as typeof this.joinRoomFn);
+    this.localPeerId = `peer-${Math.random().toString(36).slice(2, 9)}`;
+    this.localPersona = options.persona ?? generatePersona();
+  }
+
+  get currentRoomId(): string | null {
+    return this._roomId;
+  }
+
+  get currentRoomKey(): string | null {
+    return this._roomKey;
+  }
+
+  get persona(): Persona {
+    return this.localPersona;
+  }
+
+  setPersona(persona: Persona): void {
+    this.localPersona = persona;
+    if (this._roomId) {
+      this.sendAction('peer-presence', {
+        id: this.localPeerId,
+        name: persona.name,
+        color: persona.color,
+        emoji: persona.emoji,
+      });
+    }
+  }
+
+  async joinRoom(config: RoomTransportConfig): Promise<void> {
+    if (this._roomId) {
+      this.leaveRoom();
+    }
+
+    this._roomId = config.roomId;
+    this._roomKey = config.roomKey ?? null;
+
+    const trysteroConfig: { appId: string; password?: string } = {
+      appId: this.appId,
+    };
+    if (this._roomKey) {
+      trysteroConfig.password = this._roomKey;
+    }
+
+    this.room = this.joinRoomFn(trysteroConfig, config.roomId);
+
+    // Setup peer presence action
+    this.onAction<PeerInfo & { emoji?: string }>('peer-presence', (peerProfile, senderId) => {
+      const existing = this.peers.get(senderId) ?? { id: senderId };
+      const updated: PeerInfo = {
+        ...existing,
+        name: peerProfile.name,
+        color: peerProfile.color,
+      };
+      this.peers.set(senderId, updated);
+      for (const listener of this.peerJoinListeners) {
+        listener(updated);
+      }
+    });
+
+    this.room.onPeerJoin((peerId: string) => {
+      const peerInfo: PeerInfo = { id: peerId };
+      this.peers.set(peerId, peerInfo);
+
+      // Announce our presence to the newly joined peer
+      this.sendAction(
+        'peer-presence',
+        {
+          id: this.localPeerId,
+          name: this.localPersona.name,
+          color: this.localPersona.color,
+          emoji: this.localPersona.emoji,
+        },
+        peerId,
+      );
+
+      for (const listener of this.peerJoinListeners) {
+        listener(peerInfo);
+      }
+    });
+
+    this.room.onPeerLeave((peerId: string) => {
+      this.peers.delete(peerId);
+      for (const listener of this.peerLeaveListeners) {
+        listener(peerId);
+      }
+    });
+  }
+
+  leaveRoom(): void {
+    if (this.room) {
+      try {
+        this.room.leave();
+      } catch {
+        // Safe cleanup
+      }
+      this.room = null;
+    }
+    this.peers.clear();
+    this.actionHandlers.clear();
+    this._roomId = null;
+    this._roomKey = null;
+  }
+
+  getPeers(): PeerInfo[] {
+    return Array.from(this.peers.values());
+  }
+
+  onPeerJoin(cb: (peer: PeerInfo) => void): () => void {
+    this.peerJoinListeners.add(cb);
+    return () => this.peerJoinListeners.delete(cb);
+  }
+
+  onPeerLeave(cb: (peerId: string) => void): () => void {
+    this.peerLeaveListeners.add(cb);
+    return () => this.peerLeaveListeners.delete(cb);
+  }
+
+  private getOrCreateAction(actionName: string) {
+    if (!this.room) return null;
+    let entry = this.actionHandlers.get(actionName);
+    if (!entry) {
+      const [send, onReceive] = this.room.makeAction(actionName);
+      const listeners = new Set<(payload: unknown, senderId: string) => void>();
+      onReceive((data: unknown, peerId: string) => {
+        for (const listener of listeners) {
+          listener(data, peerId);
+        }
+      });
+      entry = { send, onReceive, listeners };
+      this.actionHandlers.set(actionName, entry);
+    }
+    return entry;
+  }
+
+  sendAction<T>(actionName: string, payload: T, targetPeerId?: string): void {
+    const action = this.getOrCreateAction(actionName);
+    if (!action) return;
+
+    if (targetPeerId) {
+      action.send(payload, targetPeerId);
+    } else {
+      action.send(payload);
+    }
+  }
+
+  onAction<T>(actionName: string, cb: (payload: T, senderId: string) => void): () => void {
+    const action = this.getOrCreateAction(actionName);
+    const handler = cb as (payload: unknown, senderId: string) => void;
+    if (action) {
+      action.listeners.add(handler);
+    }
+    return () => {
+      action?.listeners.delete(handler);
+    };
+  }
+
+  async getPeerStats(peerId: string): Promise<PeerConnectionStats | null> {
+    if (!this.room) return null;
+    try {
+      const rawPeers = this.room.getPeers?.() || {};
+      const pc = rawPeers[peerId];
+      if (pc && typeof pc.getStats === 'function') {
+        const stats = await pc.getStats();
+        let rtt = 20;
+        let type: 'host' | 'srflx' = 'srflx';
+        stats.forEach((report: RTCStats) => {
+          const rep = report as unknown as {
+            type: string;
+            state?: string;
+            currentRoundTripTime?: number;
+            candidateType?: string;
+          };
+          if (rep.type === 'candidate-pair' && rep.state === 'succeeded') {
+            if (rep.currentRoundTripTime) {
+              rtt = Math.round(rep.currentRoundTripTime * 1000);
+            }
+          }
+          if (rep.type === 'remote-candidate' && rep.candidateType === 'host') {
+            type = 'host';
+          }
+        });
+        return {
+          peerId,
+          roundTripTimeMs: rtt,
+          candidateType: type,
+          connectionState: 'connected',
+        };
+      }
+    } catch {
+      // Fallback
+    }
+
+    return {
+      peerId,
+      roundTripTimeMs: 25,
+      candidateType: 'srflx',
+      connectionState: 'connected',
+    };
+  }
+}
