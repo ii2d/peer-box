@@ -2,15 +2,22 @@ import { joinRoom as joinNostrRoom } from 'trystero/nostr';
 import { generatePersona, type Persona } from '../persona/persona';
 import type { PeerConnectionStats, PeerInfo, RoomTransport, RoomTransportConfig } from './types';
 
+interface TrysteroAction {
+  send: (data: unknown, options?: { target?: string } | string) => Promise<unknown> | void;
+  onMessage?: ((data: unknown, meta: { peerId: string }) => void) | null;
+}
+
 interface TrysteroRoom {
   onPeerJoin: (cb: (peerId: string) => void) => void;
   onPeerLeave: (cb: (peerId: string) => void) => void;
   makeAction: (
     name: string,
-  ) => [
-    (data: unknown, targetPeerId?: string) => void,
-    (cb: (data: unknown, peerId: string) => void) => void,
-  ];
+  ) =>
+    | TrysteroAction
+    | [
+        (data: unknown, targetPeerId?: string) => void,
+        (cb: (data: unknown, peerId: string) => void) => void,
+      ];
   getPeers?: () => Record<string, RTCPeerConnection>;
   leave: () => void;
 }
@@ -41,7 +48,6 @@ export class TrysteroTransport implements RoomTransport {
     string,
     {
       send: (data: unknown, targetPeerId?: string) => void;
-      onReceive: (cb: (data: unknown, peerId: string) => void) => void;
       listeners: Set<(payload: unknown, senderId: string) => void>;
     }
   >();
@@ -170,14 +176,36 @@ export class TrysteroTransport implements RoomTransport {
     if (!this.room) return null;
     let entry = this.actionHandlers.get(actionName);
     if (!entry) {
-      const [send, onReceive] = this.room.makeAction(actionName);
+      const rawAction = this.room.makeAction(actionName);
       const listeners = new Set<(payload: unknown, senderId: string) => void>();
-      onReceive((data: unknown, peerId: string) => {
-        for (const listener of listeners) {
-          listener(data, peerId);
-        }
-      });
-      entry = { send, onReceive, listeners };
+
+      let sendFn: (data: unknown, targetPeerId?: string) => void;
+
+      if (Array.isArray(rawAction)) {
+        const [send, onReceive] = rawAction;
+        sendFn = send;
+        onReceive((data: unknown, peerId: string) => {
+          for (const listener of listeners) {
+            listener(data, peerId);
+          }
+        });
+      } else {
+        sendFn = (data: unknown, targetPeerId?: string) => {
+          if (targetPeerId) {
+            rawAction.send(data, { target: targetPeerId });
+          } else {
+            rawAction.send(data);
+          }
+        };
+        rawAction.onMessage = (data: unknown, meta: { peerId: string }) => {
+          const senderId = meta?.peerId ?? '';
+          for (const listener of listeners) {
+            listener(data, senderId);
+          }
+        };
+      }
+
+      entry = { send: sendFn, listeners };
       this.actionHandlers.set(actionName, entry);
     }
     return entry;
