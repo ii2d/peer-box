@@ -10,6 +10,10 @@
   import { generatePersona, setStoredNickname, type Persona } from './lib/persona/persona';
   import { generateRoomName, sanitizeRoomName } from './lib/room/name-generator';
   import { buildRoomUrl, parseRoomLocation } from './lib/room/url';
+  import MediaLightbox from './lib/transfer/MediaLightbox.svelte';
+  import { MAX_SMALL_FILE_SIZE, TransferService } from './lib/transfer/transfer-service';
+  import TransferMessage from './lib/transfer/TransferMessage.svelte';
+  import type { FileTransferItem } from './lib/transfer/types';
   import { InMemoryTransport } from './lib/transport/in-memory-transport';
   import type { PeerInfo, RoomTransport } from './lib/transport/types';
 
@@ -46,6 +50,35 @@
   let selectedRecipientId = $state('everyone');
   let isPersisted = $state(getPersistencePreference());
   let messagesContainer: HTMLDivElement | null = $state(null);
+
+  // File Transfer State
+  let transferService: TransferService | null = null;
+  let transfers = $state<FileTransferItem[]>([]);
+  let transferError = $state<string | null>(null);
+  let isDraggingOver = $state(false);
+  let dragCounter = 0;
+  let activeLightbox = $state<{ src: string; name: string; size: number } | null>(null);
+
+  type TimelineItem =
+    | { type: 'chat'; id: string; timestamp: number; message: ChatMessage }
+    | { type: 'transfer'; id: string; timestamp: number; transfer: FileTransferItem };
+
+  const timelineItems = $derived<TimelineItem[]>(
+    [
+      ...messages.map((m) => ({
+        type: 'chat' as const,
+        id: m.id,
+        timestamp: m.timestamp,
+        message: m,
+      })),
+      ...transfers.map((t) => ({
+        type: 'transfer' as const,
+        id: t.id,
+        timestamp: t.meta.timestamp,
+        transfer: t,
+      })),
+    ].sort((a, b) => a.timestamp - b.timestamp),
+  );
 
   let unsubs: Array<() => void> = [];
 
@@ -90,7 +123,18 @@
       };
 
       window.addEventListener('popstate', handlePopState);
-      return () => window.removeEventListener('popstate', handlePopState);
+      window.addEventListener('dragenter', handleWindowDragEnter);
+      window.addEventListener('dragover', handleWindowDragOver);
+      window.addEventListener('dragleave', handleWindowDragLeave);
+      window.addEventListener('drop', handleWindowDrop);
+
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+        window.removeEventListener('dragenter', handleWindowDragEnter);
+        window.removeEventListener('dragover', handleWindowDragOver);
+        window.removeEventListener('dragleave', handleWindowDragLeave);
+        window.removeEventListener('drop', handleWindowDrop);
+      };
     }
   });
 
@@ -98,6 +142,7 @@
     for (const u of unsubs) u();
     if (aloneTimer) clearTimeout(aloneTimer);
     if (chatService) chatService.destroy();
+    if (transferService) transferService.destroy();
   });
 
   function startAloneTimer() {
@@ -140,6 +185,10 @@
         chatService.destroy();
         chatService = null;
       }
+      if (transferService) {
+        transferService.destroy();
+        transferService = null;
+      }
 
       await transport.joinRoom({ roomId, roomKey });
       currentRoomId = roomId;
@@ -157,6 +206,25 @@
 
       chatService.onNewMessage((msg) => {
         messages = [...messages, msg];
+        scrollToBottom();
+      });
+
+      // Initialize Transfer Service
+      transferService = new TransferService({
+        transport,
+        persona: localPersona,
+      });
+      transfers = transferService.getTransfers();
+
+      transferService.onTransferUpdate((item) => {
+        const idx = transfers.findIndex((t) => t.id === item.id);
+        if (idx >= 0) {
+          const updated = [...transfers];
+          updated[idx] = item;
+          transfers = updated;
+        } else {
+          transfers = [...transfers, item];
+        }
         scrollToBottom();
       });
 
@@ -180,6 +248,10 @@
       chatService.destroy();
       chatService = null;
     }
+    if (transferService) {
+      transferService.destroy();
+      transferService = null;
+    }
 
     transport.leaveRoom();
     currentRoomId = null;
@@ -189,6 +261,11 @@
     errorMessage = null;
     connectedPeers = [];
     messages = [];
+    transfers = [];
+    transferError = null;
+    isDraggingOver = false;
+    dragCounter = 0;
+    activeLightbox = null;
     resetAloneTimer();
 
     if (updateHistory && typeof window !== 'undefined') {
@@ -212,12 +289,98 @@
       if (chatService) {
         chatService.setPersona(localPersona);
       }
+      if (transferService) {
+        transferService.setPersona(localPersona);
+      }
       const customTransport = transport as unknown as { setPersona?: (p: Persona) => void };
       if (typeof customTransport.setPersona === 'function') {
         customTransport.setPersona(localPersona);
       }
     }
     isEditingNickname = false;
+  }
+
+  async function handleSendFiles(files: FileList | File[]) {
+    if (!transferService || !currentRoomId) return;
+
+    let targetRecipient: { id: string; name?: string } | null = null;
+    if (selectedRecipientId !== 'everyone') {
+      const peer = connectedPeers.find((p) => p.id === selectedRecipientId);
+      targetRecipient = {
+        id: selectedRecipientId,
+        name: peer?.name || selectedRecipientId,
+      };
+    }
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > MAX_SMALL_FILE_SIZE) {
+        transferError = `File "${file.name}" exceeds the 25MB limit.`;
+        setTimeout(() => {
+          if (transferError?.includes(file.name)) {
+            transferError = null;
+          }
+        }, 5000);
+        continue;
+      }
+
+      try {
+        await transferService.sendFile(file, targetRecipient);
+      } catch (err: unknown) {
+        transferError = err instanceof Error ? err.message : 'File transfer failed';
+        setTimeout(() => {
+          transferError = null;
+        }, 5000);
+      }
+    }
+  }
+
+  function handleFileInputChange(e: Event) {
+    const input = e.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      handleSendFiles(input.files);
+      input.value = '';
+    }
+  }
+
+  function handleWindowDragEnter(e: DragEvent) {
+    if (!currentRoomId) return;
+    e.preventDefault();
+    dragCounter++;
+    isDraggingOver = true;
+  }
+
+  function handleWindowDragOver(e: DragEvent) {
+    if (!currentRoomId) return;
+    e.preventDefault();
+  }
+
+  function handleWindowDragLeave(e: DragEvent) {
+    if (!currentRoomId) return;
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      isDraggingOver = false;
+    }
+  }
+
+  function handleWindowDrop(e: DragEvent) {
+    if (!currentRoomId) return;
+    e.preventDefault();
+    dragCounter = 0;
+    isDraggingOver = false;
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleSendFiles(e.dataTransfer.files);
+    }
+  }
+
+  function openLightbox(src: string, name: string, size: number) {
+    activeLightbox = { src, name, size };
+  }
+
+  function closeLightbox() {
+    activeLightbox = null;
   }
 
   function cancelEditingNickname() {
@@ -534,9 +697,9 @@
         </div>
       </div>
 
-      <!-- Chat Timeline & Messages -->
+      <!-- Chat & Transfer Timeline -->
       <div class="chat-timeline" bind:this={messagesContainer} data-testid="chat-timeline">
-        {#if messages.length === 0}
+        {#if timelineItems.length === 0}
           <div class="empty-timeline">
             <p class="empty-title">Room conversation started</p>
             <p class="empty-subtitle">
@@ -544,49 +707,76 @@
             </p>
           </div>
         {:else}
-          {#each messages as msg (msg.id)}
-            {@const isSelf = msg.senderId === transport.localPeerId}
-            <div class="message-wrapper" class:message-self={isSelf} data-testid="message-item">
-              <div class="message-meta">
-                {#if !isSelf}
-                  <span class="sender-avatar" style:background-color={msg.senderColor}>
-                    {msg.senderEmoji}
-                  </span>
-                  <span class="sender-name">{msg.senderName}</span>
-                {/if}
-                <span class="message-time">{formatTimestamp(msg.timestamp)}</span>
-                {#if msg.isPrivate}
-                  <span class="badge badge-private">
-                    🔒 Private {isSelf && msg.recipientName ? `to ${msg.recipientName}` : ''}
-                  </span>
-                {/if}
-              </div>
+          {#each timelineItems as item (item.id)}
+            {#if item.type === 'chat'}
+              {@const isSelf = item.message.senderId === transport.localPeerId}
+              <div class="message-wrapper" class:message-self={isSelf} data-testid="message-item">
+                <div class="message-meta">
+                  {#if !isSelf}
+                    <span class="sender-avatar" style:background-color={item.message.senderColor}>
+                      {item.message.senderEmoji}
+                    </span>
+                    <span class="sender-name">{item.message.senderName}</span>
+                  {/if}
+                  <span class="message-time">{formatTimestamp(item.message.timestamp)}</span>
+                  {#if item.message.isPrivate}
+                    <span class="badge badge-private">
+                      🔒 Private {isSelf && item.message.recipientName
+                        ? `to ${item.message.recipientName}`
+                        : ''}
+                    </span>
+                  {/if}
+                </div>
 
-              <div class="message-bubble" class:bubble-self={isSelf}>
-                <p class="message-text">{msg.content}</p>
+                <div class="message-bubble" class:bubble-self={isSelf}>
+                  <p class="message-text">{item.message.content}</p>
+                </div>
               </div>
-            </div>
+            {:else if item.type === 'transfer'}
+              {@const isSelf = item.transfer.meta.senderId === transport.localPeerId}
+              <TransferMessage transfer={item.transfer} {isSelf} onOpenImage={openLightbox} />
+            {/if}
           {/each}
         {/if}
       </div>
 
+      {#if transferError}
+        <div class="transfer-error-toast" data-testid="transfer-error">
+          ⚠️ {transferError}
+        </div>
+      {/if}
+
       <!-- Composer & Recipient Selector -->
       <div class="composer-container">
         <div class="composer-toolbar">
-          <div class="recipient-selector-wrapper">
-            <span class="recipient-label">Send to:</span>
-            <select
-              class="recipient-select"
-              data-testid="recipient-select"
-              bind:value={selectedRecipientId}
-            >
-              <option value="everyone">🌐 Everyone</option>
-              {#each connectedPeers as peer (peer.id)}
-                <option value={peer.id}>
-                  🔒 {peer.name || peer.id}
-                </option>
-              {/each}
-            </select>
+          <div class="composer-toolbar-left">
+            <div class="recipient-selector-wrapper">
+              <span class="recipient-label">Send to:</span>
+              <select
+                class="recipient-select"
+                data-testid="recipient-select"
+                bind:value={selectedRecipientId}
+              >
+                <option value="everyone">🌐 Everyone</option>
+                {#each connectedPeers as peer (peer.id)}
+                  <option value={peer.id}>
+                    🔒 {peer.name || peer.id}
+                  </option>
+                {/each}
+              </select>
+            </div>
+
+            <label class="btn-attach" title="Attach file (<25MB)" data-testid="attach-file-btn">
+              <span class="attach-icon">📎</span>
+              <span class="attach-text">Attach</span>
+              <input
+                type="file"
+                multiple
+                class="hidden-file-input"
+                data-testid="file-input"
+                onchange={handleFileInputChange}
+              />
+            </label>
           </div>
         </div>
 
@@ -610,6 +800,35 @@
           </button>
         </div>
       </div>
+
+      <!-- Drag & Drop Fullscreen Overlay -->
+      {#if isDraggingOver}
+        <div class="drag-overlay" data-testid="drag-overlay">
+          <div class="drag-overlay-box">
+            <span class="drag-overlay-icon">📁</span>
+            <h3 class="drag-overlay-title">Drop files to send</h3>
+            <p class="drag-overlay-subtitle">
+              Sending directly to
+              <strong>
+                {selectedRecipientId === 'everyone'
+                  ? 'Everyone'
+                  : connectedPeers.find((p) => p.id === selectedRecipientId)?.name ||
+                    'Selected Peer'}
+              </strong>
+            </p>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Full-size Image Lightbox -->
+      {#if activeLightbox}
+        <MediaLightbox
+          src={activeLightbox.src}
+          alt={activeLightbox.name}
+          size={activeLightbox.size}
+          onClose={closeLightbox}
+        />
+      {/if}
     </div>
   {/if}
 </main>
@@ -1096,6 +1315,12 @@
     align-items: center;
   }
 
+  .composer-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
   .recipient-selector-wrapper {
     display: flex;
     align-items: center;
@@ -1118,6 +1343,97 @@
   .recipient-select:focus {
     outline: none;
     border-color: var(--primary);
+  }
+
+  .btn-attach {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.65rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--card-border);
+    border-radius: 0.5rem;
+    color: var(--text-main);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+
+  .btn-attach:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .hidden-file-input {
+    display: none;
+  }
+
+  .transfer-error-toast {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+    padding: 0.5rem 0.85rem;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    margin-bottom: 0.5rem;
+    animation: fadeIn 0.2s;
+  }
+
+  .drag-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    pointer-events: none;
+  }
+
+  .drag-overlay-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--primary);
+    border-radius: 1.5rem;
+    padding: 3.5rem 4rem;
+    background: rgba(99, 102, 241, 0.1);
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+    animation: scaleUp 0.15s ease-out;
+  }
+
+  .drag-overlay-icon {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .drag-overlay-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0.35rem;
+  }
+
+  .drag-overlay-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  @keyframes scaleUp {
+    from {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
   }
 
   .composer-input-row {

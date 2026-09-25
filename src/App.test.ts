@@ -267,4 +267,139 @@ describe('PeerBox App Component', () => {
     unmount(component);
     target.remove();
   });
+
+  it('handles file selection via paperclip input and sends chunked transfer', async () => {
+    window.history.replaceState({}, '', '/cute-dog');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('peer-1');
+
+    const component = mount(App, { target, props: { transport } });
+
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    const fileInput = target.querySelector<HTMLInputElement>('[data-testid="file-input"]')!;
+    expect(fileInput).not.toBeNull();
+
+    const file = new File(['console.log("hello peer-box!");'], 'script.js', {
+      type: 'text/javascript',
+    });
+
+    Object.defineProperty(fileInput, 'files', {
+      value: [file],
+      writable: true,
+    });
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    flushSync();
+
+    await new Promise((r) => setTimeout(r, 30));
+    flushSync();
+
+    const transferItem = target.querySelector('[data-testid="transfer-item"]');
+    expect(transferItem).not.toBeNull();
+    expect(transferItem?.textContent).toContain('script.js');
+    expect(target.querySelector('[data-testid="download-btn"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="code-preview"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="code-preview"]')?.textContent).toContain(
+      'console.log("hello peer-box!");',
+    );
+
+    unmount(component);
+    target.remove();
+  });
+
+  it('shows and hides drag-and-drop overlay on window drag events', async () => {
+    window.history.replaceState({}, '', '/cute-dog');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('peer-1');
+
+    const component = mount(App, { target, props: { transport } });
+
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    expect(target.querySelector('[data-testid="drag-overlay"]')).toBeNull();
+
+    // Trigger dragenter on window
+    const dragEnterEvent = new Event('dragenter', { bubbles: true, cancelable: true });
+    window.dispatchEvent(dragEnterEvent);
+    flushSync();
+
+    expect(target.querySelector('[data-testid="drag-overlay"]')).not.toBeNull();
+
+    // Trigger dragleave
+    const dragLeaveEvent = new Event('dragleave', { bubbles: true, cancelable: true });
+    window.dispatchEvent(dragLeaveEvent);
+    flushSync();
+
+    expect(target.querySelector('[data-testid="drag-overlay"]')).toBeNull();
+
+    unmount(component);
+    target.remove();
+  });
+
+  it('receives file transfer from remote peer and opens lightbox on image click', async () => {
+    window.history.replaceState({}, '', '/cute-dog');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('peer-1');
+    const transport2 = new InMemoryTransport('peer-2');
+
+    const component = mount(App, { target, props: { transport: transport1 } });
+
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    await transport2.joinRoom({ roomId: 'cute-dog' });
+    flushSync();
+
+    // Transport 2 sends image transfer
+    transport2.sendAction('file-meta', {
+      id: 'img_test_123',
+      name: 'sunset.png',
+      size: 1024,
+      mimeType: 'image/png',
+      totalChunks: 1,
+      senderId: 'peer-2',
+      senderName: 'Sunny Fox',
+      senderEmoji: '🦊',
+      senderColor: '#f97316',
+      recipientId: null,
+      isPrivate: false,
+      timestamp: Date.now(),
+    });
+
+    transport2.sendAction('file-chunk', {
+      transferId: 'img_test_123',
+      chunkIndex: 0,
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+    flushSync();
+
+    const transferItem = target.querySelector('[data-testid="transfer-item"]');
+    expect(transferItem).not.toBeNull();
+    expect(transferItem?.textContent).toContain('sunset.png');
+    expect(target.querySelector('[data-testid="image-preview"]')).not.toBeNull();
+
+    // Click image thumbnail to open lightbox
+    const imgPreviewBtn = target.querySelector<HTMLButtonElement>('[data-testid="image-preview"]')!;
+    imgPreviewBtn.click();
+    flushSync();
+
+    expect(target.querySelector('[data-testid="lightbox-overlay"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="lightbox-close-btn"]')).not.toBeNull();
+
+    // Click close
+    target.querySelector<HTMLButtonElement>('[data-testid="lightbox-close-btn"]')?.click();
+    flushSync();
+
+    expect(target.querySelector('[data-testid="lightbox-overlay"]')).toBeNull();
+
+    unmount(component);
+    target.remove();
+  });
 });
