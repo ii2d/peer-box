@@ -14,6 +14,10 @@ _Avoid_: Channel, session, lobby, chatroom
 A shared secret string used to derive encryption keys for peer discovery and end-to-end data encryption.
 _Avoid_: Password, PIN, auth token
 
+**Trust Guarantee**:
+The verifiable architectural and cryptographic assurances (Zero Servers, End-to-End Encryption, Ephemeral Memory, Direct P2P) communicated to peers.
+_Avoid_: Privacy policy, terms of service, disclaimer
+
 ### Identity
 
 **Peer**:
