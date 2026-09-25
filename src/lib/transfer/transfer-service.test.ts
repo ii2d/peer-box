@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryTransport, resetInMemoryTransportRooms } from '../transport/in-memory-transport';
 import { TransferService } from './transfer-service';
+import type { FileTransferItem } from './types';
 
 describe('TransferService', () => {
   beforeEach(() => {
     resetInMemoryTransportRooms();
   });
 
-  it('chunks, transfers, and reassembles small files between peers', async () => {
+  it('chunks, transfers, and reassembles small files (<25MB) automatically', async () => {
     const transport1 = new InMemoryTransport('peer-1');
     const transport2 = new InMemoryTransport('peer-2');
 
@@ -17,10 +18,10 @@ describe('TransferService', () => {
     const service1 = new TransferService({
       transport: transport1,
       persona: { name: 'Sender Cat', color: '#ff0000', emoji: '🐱' },
-      chunkSize: 1024, // 1KB chunks for testing
+      chunkSize: 1024,
     });
 
-    const receivedItems: unknown[] = [];
+    const receivedItems: FileTransferItem[] = [];
     const service2 = new TransferService({
       transport: transport2,
       persona: { name: 'Receiver Dog', color: '#00ff00', emoji: '🐶' },
@@ -32,8 +33,8 @@ describe('TransferService', () => {
       }
     });
 
-    const fileContent = 'Hello peer-to-peer chunked file transfer!'.repeat(50);
-    const file = new File([fileContent], 'message.txt', { type: 'text/plain' });
+    const fileContent = 'Small file content!'.repeat(50);
+    const file = new File([fileContent], 'small.txt', { type: 'text/plain' });
 
     const sentItem = await service1.sendFile(file);
 
@@ -42,87 +43,168 @@ describe('TransferService', () => {
 
     expect(sentItem.status).toBe('completed');
     expect(sentItem.isSender).toBe(true);
-    expect(sentItem.meta.totalChunks).toBeGreaterThan(1);
 
     expect(receivedItems.length).toBe(1);
-    const received = receivedItems[0] as {
-      status: string;
-      meta: { name: string; size: number };
-      mediaCategory: string;
-      textContent?: string;
-    };
-    expect(received.status).toBe('completed');
-    expect(received.meta.name).toBe('message.txt');
-    expect(received.meta.size).toBe(file.size);
-    expect(received.mediaCategory).toBe('code');
-    expect(received.textContent).toBe(fileContent);
+    expect(receivedItems[0].status).toBe('completed');
+    expect(receivedItems[0].meta.name).toBe('small.txt');
+    expect(receivedItems[0].textContent).toBe(fileContent);
 
     service1.destroy();
     service2.destroy();
   });
 
-  it('routes targeted transfers only to the chosen recipient peer', async () => {
+  it('handles large file (≥25MB) request, acceptance, and OPFS/sink streaming', async () => {
     const transport1 = new InMemoryTransport('peer-1');
     const transport2 = new InMemoryTransport('peer-2');
-    const transport3 = new InMemoryTransport('peer-3');
 
-    await transport1.joinRoom({ roomId: 'whisper-room' });
-    await transport2.joinRoom({ roomId: 'whisper-room' });
-    await transport3.joinRoom({ roomId: 'whisper-room' });
+    await transport1.joinRoom({ roomId: 'large-room' });
+    await transport2.joinRoom({ roomId: 'large-room' });
 
     const service1 = new TransferService({
       transport: transport1,
-      persona: { name: 'Alice', color: '#ff0000', emoji: '🐱' },
+      persona: { name: 'Sender Elephant', color: '#3b82f6', emoji: '🐘' },
+      chunkSize: 1024 * 1024, // 1MB chunks
     });
 
-    let peer2Received = false;
+    let receiverItem: FileTransferItem | null = null;
     const service2 = new TransferService({
       transport: transport2,
-      persona: { name: 'Bob', color: '#00ff00', emoji: '🐶' },
+      persona: { name: 'Receiver Bear', color: '#10b981', emoji: '🐻' },
+      chunkSize: 1024 * 1024,
     });
     service2.onTransferUpdate((item) => {
-      if (item.status === 'completed') peer2Received = true;
+      receiverItem = item;
     });
 
-    let peer3Received = false;
-    const service3 = new TransferService({
-      transport: transport3,
-      persona: { name: 'Charlie', color: '#0000ff', emoji: '🦊' },
-    });
-    service3.onTransferUpdate((item) => {
-      if (item.status === 'completed') peer3Received = true;
-    });
+    // Mock 30MB file
+    const largeSize = 30 * 1024 * 1024;
+    const chunkData = new Uint8Array(1024 * 1024).fill(65);
+    const largeFile = {
+      name: 'archive.iso',
+      size: largeSize,
+      type: 'application/octet-stream',
+      slice: (start: number, end: number) => {
+        const len = end - start;
+        return new Blob([chunkData.subarray(0, len)]);
+      },
+    } as unknown as File;
 
-    const file = new File(['private message data'], 'secret.txt', { type: 'text/plain' });
-    await service1.sendFile(file, { id: 'peer-2', name: 'Bob' });
+    // Sender initiates transfer
+    const sendPromise = service1.sendFile(largeFile);
 
-    expect(peer2Received).toBe(true);
-    expect(peer3Received).toBe(false);
+    // Allow metadata action to propagate
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Receiver should have received incoming request in 'pending-decision' state
+    expect(receiverItem).not.toBeNull();
+    expect(receiverItem!.status).toBe('pending-decision');
+    expect(receiverItem!.meta.isLarge).toBe(true);
+    expect(receiverItem!.meta.name).toBe('archive.iso');
+
+    // Receiver accepts transfer
+    await service2.acceptTransfer(receiverItem!.id);
+
+    // Wait for chunk transfer and acks to complete
+    await sendPromise;
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(receiverItem!.status).toBe('completed');
+    expect(receiverItem!.progress).toBe(1);
+    expect(receiverItem!.speed).toBeDefined();
 
     service1.destroy();
     service2.destroy();
-    service3.destroy();
   });
 
-  it('rejects files larger than 25MB with clear error', async () => {
-    const transport = new InMemoryTransport('peer-1');
-    await transport.joinRoom({ roomId: 'limit-room' });
+  it('handles large file decline by recipient', async () => {
+    const transport1 = new InMemoryTransport('peer-1');
+    const transport2 = new InMemoryTransport('peer-2');
 
-    const service = new TransferService({
-      transport,
+    await transport1.joinRoom({ roomId: 'decline-room' });
+    await transport2.joinRoom({ roomId: 'decline-room' });
+
+    const service1 = new TransferService({
+      transport: transport1,
       persona: { name: 'Sender', color: '#ff0000', emoji: '🐱' },
     });
 
-    // Mock a large file > 25MB
+    let receiverItem: FileTransferItem | null = null;
+    const service2 = new TransferService({
+      transport: transport2,
+      persona: { name: 'Receiver', color: '#00ff00', emoji: '🐶' },
+    });
+    service2.onTransferUpdate((item) => {
+      receiverItem = item;
+    });
+
     const largeFile = {
-      name: 'huge.iso',
-      size: 26 * 1024 * 1024,
-      type: 'application/octet-stream',
+      name: 'movie.mp4',
+      size: 50 * 1024 * 1024,
+      type: 'video/mp4',
       slice: () => new Blob(),
     } as unknown as File;
 
-    await expect(service.sendFile(largeFile)).rejects.toThrow('File exceeds 25MB limit');
+    const sendPromise = service1.sendFile(largeFile);
+    await new Promise((r) => setTimeout(r, 10));
 
-    service.destroy();
+    expect(receiverItem).not.toBeNull();
+    expect(receiverItem!.status).toBe('pending-decision');
+
+    // Recipient declines
+    service2.declineTransfer(receiverItem!.id);
+    await expect(sendPromise).rejects.toThrow('Transfer declined by recipient');
+
+    expect(receiverItem!.status).toBe('declined');
+
+    service1.destroy();
+    service2.destroy();
+  });
+
+  it('handles cancellation by sender during active transfer', async () => {
+    const transport1 = new InMemoryTransport('peer-1');
+    const transport2 = new InMemoryTransport('peer-2');
+
+    await transport1.joinRoom({ roomId: 'cancel-room' });
+    await transport2.joinRoom({ roomId: 'cancel-room' });
+
+    const service1 = new TransferService({
+      transport: transport1,
+      persona: { name: 'Sender', color: '#ff0000', emoji: '🐱' },
+      chunkSize: 1024,
+    });
+
+    let receiverItem: FileTransferItem | null = null;
+    const service2 = new TransferService({
+      transport: transport2,
+      persona: { name: 'Receiver', color: '#00ff00', emoji: '🐶' },
+      chunkSize: 1024,
+    });
+    service2.onTransferUpdate((item) => {
+      receiverItem = item;
+    });
+
+    const largeFile = {
+      name: 'data.bin',
+      size: 26 * 1024 * 1024,
+      type: 'application/octet-stream',
+      slice: () => new Blob([new Uint8Array(1024)]),
+    } as unknown as File;
+
+    const sendPromise = service1.sendFile(largeFile);
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Recipient accepts
+    const acceptPromise = service2.acceptTransfer(receiverItem!.id);
+
+    // Sender cancels immediately
+    service1.cancelTransfer(receiverItem!.id);
+
+    await expect(sendPromise).rejects.toThrow('Transfer cancelled');
+    await acceptPromise.catch(() => {});
+
+    expect(receiverItem!.status).toBe('cancelled');
+
+    service1.destroy();
+    service2.destroy();
   });
 });

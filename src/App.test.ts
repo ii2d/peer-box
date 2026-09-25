@@ -402,4 +402,71 @@ describe('PeerBox App Component', () => {
     unmount(component);
     target.remove();
   });
+
+  it('handles large file incoming request card, acceptance, and cancellation', async () => {
+    window.history.replaceState({}, '', '/cute-dog');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('peer-1');
+    const transport2 = new InMemoryTransport('peer-2');
+
+    const component = mount(App, { target, props: { transport: transport1 } });
+
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    await transport2.joinRoom({ roomId: 'cute-dog' });
+    flushSync();
+
+    // Peer 2 sends a large file meta (30MB)
+    transport2.sendAction('file-meta', {
+      id: 'large_test_999',
+      name: 'big_video.mp4',
+      size: 30 * 1024 * 1024,
+      mimeType: 'video/mp4',
+      totalChunks: 30,
+      isLarge: true,
+      senderId: 'peer-2',
+      senderName: 'Sunny Fox',
+      senderEmoji: '🦊',
+      senderColor: '#f97316',
+      recipientId: null,
+      isPrivate: false,
+      timestamp: Date.now(),
+    });
+
+    await new Promise((r) => setTimeout(r, 20));
+    flushSync();
+
+    const transferItem = target.querySelector('[data-testid="transfer-item"]');
+    expect(transferItem).not.toBeNull();
+    expect(transferItem?.textContent).toContain('big_video.mp4');
+
+    // Receiver sees accept and decline buttons
+    const acceptBtn = target.querySelector<HTMLButtonElement>(
+      '[data-testid="accept-transfer-btn"]',
+    );
+    const declineBtn = target.querySelector<HTMLButtonElement>(
+      '[data-testid="decline-transfer-btn"]',
+    );
+    expect(acceptBtn).not.toBeNull();
+    expect(declineBtn).not.toBeNull();
+
+    // Click Accept
+    acceptBtn?.click();
+    flushSync();
+
+    // Receiver should transition to transferring state with progress section
+    expect(target.querySelector('[data-testid="transfer-progress"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="cancel-transfer-btn"]')).not.toBeNull();
+
+    // Click Cancel
+    target.querySelector<HTMLButtonElement>('[data-testid="cancel-transfer-btn"]')?.click();
+    flushSync();
+
+    expect(target.querySelector('[data-testid="cancelled-badge"]')).not.toBeNull();
+
+    unmount(component);
+    target.remove();
+  });
 });

@@ -11,7 +11,7 @@
   import { generateRoomName, sanitizeRoomName } from './lib/room/name-generator';
   import { buildRoomUrl, parseRoomLocation } from './lib/room/url';
   import MediaLightbox from './lib/transfer/MediaLightbox.svelte';
-  import { MAX_SMALL_FILE_SIZE, TransferService } from './lib/transfer/transfer-service';
+  import { TransferService } from './lib/transfer/transfer-service';
   import TransferMessage from './lib/transfer/TransferMessage.svelte';
   import type { FileTransferItem } from './lib/transfer/types';
   import { InMemoryTransport } from './lib/transport/in-memory-transport';
@@ -314,16 +314,6 @@
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (file.size > MAX_SMALL_FILE_SIZE) {
-        transferError = `File "${file.name}" exceeds the 25MB limit.`;
-        setTimeout(() => {
-          if (transferError?.includes(file.name)) {
-            transferError = null;
-          }
-        }, 5000);
-        continue;
-      }
-
       try {
         await transferService.sendFile(file, targetRecipient);
       } catch (err: unknown) {
@@ -333,6 +323,22 @@
         }, 5000);
       }
     }
+  }
+
+  function handleAcceptTransfer(transferId: string) {
+    transferService?.acceptTransfer(transferId);
+  }
+
+  function handleDeclineTransfer(transferId: string) {
+    transferService?.declineTransfer(transferId);
+  }
+
+  function handleCancelTransfer(transferId: string) {
+    transferService?.cancelTransfer(transferId);
+  }
+
+  function handleExportTransfer(transferId: string) {
+    transferService?.exportTransfer(transferId);
   }
 
   function handleFileInputChange(e: Event) {
@@ -734,7 +740,15 @@
               </div>
             {:else if item.type === 'transfer'}
               {@const isSelf = item.transfer.meta.senderId === transport.localPeerId}
-              <TransferMessage transfer={item.transfer} {isSelf} onOpenImage={openLightbox} />
+              <TransferMessage
+                transfer={item.transfer}
+                {isSelf}
+                onOpenImage={openLightbox}
+                onAccept={handleAcceptTransfer}
+                onDecline={handleDeclineTransfer}
+                onCancel={handleCancelTransfer}
+                onExport={handleExportTransfer}
+              />
             {/if}
           {/each}
         {/if}

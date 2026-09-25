@@ -2,47 +2,99 @@ import type { Persona } from '../persona/persona';
 import type { RoomTransport } from '../transport/types';
 import { base64ToUint8Array, uint8ArrayToBase64 } from './base64';
 import { detectMediaCategory } from './media-type';
-import type { FileTransferChunk, FileTransferItem, FileTransferMeta } from './types';
+import {
+  createStorage,
+  exportFileToDisk,
+  type FileStorage,
+  type FileStorageSink,
+} from './opfs-storage';
+import { createTransferTelemetry, type TransferTelemetry } from './telemetry';
+import type {
+  FileTransferAck,
+  FileTransferCancel,
+  FileTransferChunk,
+  FileTransferDecision,
+  FileTransferItem,
+  FileTransferMeta,
+  FileTransferStatus,
+} from './types';
 
-export const MAX_SMALL_FILE_SIZE = 25 * 1024 * 1024; // 25MB
-export const DEFAULT_CHUNK_SIZE = 64 * 1024; // 64KB
+export const MAX_SMALL_FILE_SIZE = 25 * 1024 * 1024; // 25MB threshold
+export const DEFAULT_CHUNK_SIZE = 64 * 1024; // 64KB chunks
 
 export interface TransferServiceOptions {
   transport: RoomTransport;
   persona: Persona;
   chunkSize?: number;
+  storage?: FileStorage;
 }
 
-interface IncomingBuffer {
+interface ActiveIncomingTransfer {
   meta: FileTransferMeta;
-  chunks: (Uint8Array | null)[];
-  receivedCount: number;
+  sink?: FileStorageSink;
+  receivedChunks: number;
+  bytesReceived: number;
+  telemetry: TransferTelemetry;
+  ackTimer?: ReturnType<typeof setInterval>;
+  cancelled: boolean;
+}
+
+interface ActiveOutgoingTransfer {
+  meta: FileTransferMeta;
+  telemetry: TransferTelemetry;
+  cancelled: boolean;
+  decisionResolve?: (accepted: boolean) => void;
+  decisionReject?: (err: Error) => void;
 }
 
 export class TransferService {
   private transport: RoomTransport;
   private persona: Persona;
   private chunkSize: number;
+  private storage: FileStorage;
 
   private transfers = new Map<string, FileTransferItem>();
-  private incomingBuffers = new Map<string, IncomingBuffer>();
+  private incoming = new Map<string, ActiveIncomingTransfer>();
+  private outgoing = new Map<string, ActiveOutgoingTransfer>();
   private updateListeners = new Set<(item: FileTransferItem) => void>();
 
-  private unsubMeta: (() => void) | null = null;
-  private unsubChunk: (() => void) | null = null;
+  private unsubs: Array<() => void> = [];
 
   constructor(options: TransferServiceOptions) {
     this.transport = options.transport;
     this.persona = options.persona;
     this.chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
+    this.storage = options.storage ?? createStorage();
 
-    this.unsubMeta = this.transport.onAction<FileTransferMeta>('file-meta', (meta, senderId) => {
-      this.handleIncomingMeta(meta, senderId);
-    });
+    this.unsubs.push(
+      this.transport.onAction<FileTransferMeta>('file-meta', (meta, senderId) => {
+        this.handleIncomingMeta(meta, senderId);
+      }),
+    );
 
-    this.unsubChunk = this.transport.onAction<FileTransferChunk>('file-chunk', (chunk) => {
-      this.handleIncomingChunk(chunk);
-    });
+    this.unsubs.push(
+      this.transport.onAction<FileTransferChunk>('file-chunk', (chunk) => {
+        this.handleIncomingChunk(chunk);
+      }),
+    );
+
+    this.unsubs.push(
+      this.transport.onAction<FileTransferDecision>('file-decision', (decision) => {
+        this.handleDecision(decision);
+      }),
+    );
+
+    this.unsubs.push(
+      this.transport.onAction<FileTransferAck>('file-ack', (ack) => {
+        this.handleAck(ack);
+      }),
+    );
+
+    this.unsubs.push(
+      this.transport.onAction<FileTransferCancel>('file-cancel', (cancel) => {
+        this.handleCancel(cancel.transferId, false);
+      }),
+    );
   }
 
   setPersona(persona: Persona): void {
@@ -65,7 +117,6 @@ export class TransferService {
   }
 
   private handleIncomingMeta(meta: FileTransferMeta, senderId: string): void {
-    // If targeted to a specific peer, ignore if not meant for us
     if (meta.recipientId && meta.recipientId !== this.transport.localPeerId) {
       return;
     }
@@ -76,48 +127,237 @@ export class TransferService {
     };
 
     const mediaCategory = detectMediaCategory(meta.name, meta.mimeType);
+    const status: FileTransferStatus = meta.isLarge ? 'pending-decision' : 'transferring';
+
     const item: FileTransferItem = {
       id: meta.id,
       meta: validatedMeta,
       receivedChunks: 0,
       totalChunks: meta.totalChunks,
+      bytesTransferred: 0,
       progress: 0,
-      status: 'transferring',
+      status,
       mediaCategory,
       isSender: false,
     };
 
     this.transfers.set(meta.id, item);
-    this.incomingBuffers.set(meta.id, {
+
+    const incomingTransfer: ActiveIncomingTransfer = {
       meta: validatedMeta,
-      chunks: new Array(meta.totalChunks).fill(null),
-      receivedCount: 0,
-    });
+      receivedChunks: 0,
+      bytesReceived: 0,
+      telemetry: createTransferTelemetry(meta.size),
+      cancelled: false,
+    };
+    this.incoming.set(meta.id, incomingTransfer);
+
+    this.notify(item);
+
+    // If small file, auto-accept immediately
+    if (!meta.isLarge) {
+      this.startIncomingSink(meta.id);
+    }
+  }
+
+  private async startIncomingSink(transferId: string): Promise<void> {
+    const inc = this.incoming.get(transferId);
+    const item = this.transfers.get(transferId);
+    if (!inc || !item || inc.sink) return;
+
+    try {
+      inc.sink = await this.storage.createSink(inc.meta.name, inc.meta.mimeType);
+    } catch {
+      // Fallback
+    }
+
+    // Set up 500ms telemetry & sync acks
+    inc.ackTimer = setInterval(() => {
+      if (inc.cancelled) return;
+      this.sendAckToPeer(transferId);
+    }, 500);
+  }
+
+  private sendAckToPeer(transferId: string): void {
+    const inc = this.incoming.get(transferId);
+    if (!inc) return;
+
+    const ack: FileTransferAck = {
+      transferId,
+      receivedChunks: inc.receivedChunks,
+      bytesTransferred: inc.bytesReceived,
+    };
+
+    const targetPeerId = inc.meta.senderId;
+    this.transport.sendAction('file-ack', ack, targetPeerId);
+  }
+
+  async acceptTransfer(transferId: string): Promise<void> {
+    const inc = this.incoming.get(transferId);
+    const item = this.transfers.get(transferId);
+    if (!inc || !item || inc.cancelled) return;
+
+    item.status = 'transferring';
+    this.notify(item);
+
+    await this.startIncomingSink(transferId);
+
+    const decision: FileTransferDecision = {
+      transferId,
+      decision: 'accepted',
+    };
+    this.transport.sendAction('file-decision', decision, inc.meta.senderId);
+  }
+
+  declineTransfer(transferId: string): void {
+    const inc = this.incoming.get(transferId);
+    const item = this.transfers.get(transferId);
+    if (!inc || !item) return;
+
+    item.status = 'declined';
+    this.notify(item);
+
+    const decision: FileTransferDecision = {
+      transferId,
+      decision: 'declined',
+    };
+    this.transport.sendAction('file-decision', decision, inc.meta.senderId);
+    this.cleanupIncoming(transferId);
+  }
+
+  cancelTransfer(transferId: string): void {
+    this.handleCancel(transferId, true);
+  }
+
+  private handleCancel(transferId: string, isInitiator: boolean): void {
+    const item = this.transfers.get(transferId);
+    if (item) {
+      item.status = 'cancelled';
+      this.notify(item);
+    }
+
+    const out = this.outgoing.get(transferId);
+    if (out) {
+      out.cancelled = true;
+      if (out.decisionReject) {
+        out.decisionReject(new Error('Transfer cancelled'));
+      }
+      this.outgoing.delete(transferId);
+    }
+
+    const inc = this.incoming.get(transferId);
+    if (inc) {
+      inc.cancelled = true;
+      this.cleanupIncoming(transferId);
+    }
+
+    if (isInitiator) {
+      let targetPeerId: string | undefined;
+      if (item) {
+        if (item.isSender) {
+          targetPeerId = item.meta.recipientId || undefined;
+        } else {
+          targetPeerId = item.meta.senderId;
+        }
+      }
+      const cancelPayload: FileTransferCancel = { transferId };
+      this.transport.sendAction('file-cancel', cancelPayload, targetPeerId);
+    }
+  }
+
+  private cleanupIncoming(transferId: string): void {
+    const inc = this.incoming.get(transferId);
+    if (!inc) return;
+
+    if (inc.ackTimer) {
+      clearInterval(inc.ackTimer);
+      inc.ackTimer = undefined;
+    }
+    if (inc.sink) {
+      inc.sink.abort().catch(() => {});
+    }
+    this.incoming.delete(transferId);
+  }
+
+  private handleDecision(decision: FileTransferDecision): void {
+    const out = this.outgoing.get(decision.transferId);
+    const item = this.transfers.get(decision.transferId);
+
+    if (decision.decision === 'declined') {
+      if (item) {
+        item.status = 'declined';
+        this.notify(item);
+      }
+      if (out?.decisionReject) {
+        out.decisionReject(new Error('Transfer declined by recipient'));
+      }
+      this.outgoing.delete(decision.transferId);
+    } else if (decision.decision === 'accepted') {
+      if (item) {
+        item.status = 'transferring';
+        this.notify(item);
+      }
+      if (out?.decisionResolve) {
+        out.decisionResolve(true);
+      }
+    }
+  }
+
+  private handleAck(ack: FileTransferAck): void {
+    const item = this.transfers.get(ack.transferId);
+    const out = this.outgoing.get(ack.transferId);
+    if (!item) return;
+
+    item.receivedChunks = ack.receivedChunks;
+    item.bytesTransferred = ack.bytesTransferred;
+    item.progress = Math.min(1, ack.bytesTransferred / item.meta.size);
+
+    if (out) {
+      out.telemetry.update(ack.bytesTransferred);
+      item.speed = out.telemetry.getSpeedFormatted();
+      item.eta = out.telemetry.getEtaFormatted();
+    }
 
     this.notify(item);
   }
 
   private async handleIncomingChunk(chunk: FileTransferChunk): Promise<void> {
-    const buffer = this.incomingBuffers.get(chunk.transferId);
+    const inc = this.incoming.get(chunk.transferId);
     const item = this.transfers.get(chunk.transferId);
-    if (!buffer || !item) return;
-
-    if (chunk.chunkIndex < 0 || chunk.chunkIndex >= buffer.meta.totalChunks) return;
-    if (buffer.chunks[chunk.chunkIndex] !== null) return; // duplicate
+    if (!inc || !item || inc.cancelled) return;
 
     const bytes = base64ToUint8Array(chunk.data);
-    buffer.chunks[chunk.chunkIndex] = bytes;
-    buffer.receivedCount++;
+    inc.receivedChunks++;
+    inc.bytesReceived += bytes.byteLength;
 
-    item.receivedChunks = buffer.receivedCount;
-    item.progress = buffer.receivedCount / buffer.meta.totalChunks;
+    if (inc.sink) {
+      await inc.sink.write(bytes);
+    }
 
-    if (buffer.receivedCount === buffer.meta.totalChunks) {
-      // Reassemble blob
-      const validChunks = buffer.chunks.filter((c): c is Uint8Array => c !== null);
-      const blob = new Blob(validChunks as BlobPart[], {
-        type: buffer.meta.mimeType || 'application/octet-stream',
-      });
+    inc.telemetry.update(inc.bytesReceived);
+
+    item.receivedChunks = inc.receivedChunks;
+    item.bytesTransferred = inc.bytesReceived;
+    item.progress = Math.min(1, inc.bytesReceived / inc.meta.size);
+    item.speed = inc.telemetry.getSpeedFormatted();
+    item.eta = inc.telemetry.getEtaFormatted();
+
+    if (inc.receivedChunks >= inc.meta.totalChunks) {
+      // Finalize transfer
+      if (inc.ackTimer) {
+        clearInterval(inc.ackTimer);
+        inc.ackTimer = undefined;
+      }
+      // Send final ack
+      this.sendAckToPeer(chunk.transferId);
+
+      let blob: Blob | undefined;
+      if (inc.sink) {
+        blob = await inc.sink.close();
+      } else {
+        blob = new Blob([bytes as unknown as BlobPart], { type: inc.meta.mimeType });
+      }
+
       let blobUrl = '';
       try {
         if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
@@ -131,8 +371,8 @@ export class TransferService {
       item.blobUrl = blobUrl;
       item.status = 'completed';
       item.progress = 1;
+      item.eta = '0s';
 
-      // Extract text content for code/text previews
       if (item.mediaCategory === 'code' && typeof blob.text === 'function') {
         try {
           item.textContent = await blob.text();
@@ -141,7 +381,7 @@ export class TransferService {
         }
       }
 
-      this.incomingBuffers.delete(chunk.transferId);
+      this.incoming.delete(chunk.transferId);
     }
 
     this.notify(item);
@@ -151,10 +391,7 @@ export class TransferService {
     file: File,
     recipient?: { id: string; name?: string } | null,
   ): Promise<FileTransferItem> {
-    if (file.size > MAX_SMALL_FILE_SIZE) {
-      throw new Error('File exceeds 25MB limit');
-    }
-
+    const isLarge = file.size >= MAX_SMALL_FILE_SIZE;
     const totalChunks = Math.ceil(file.size / this.chunkSize) || 1;
     const transferId = `transfer_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const isPrivate = Boolean(recipient?.id);
@@ -166,6 +403,7 @@ export class TransferService {
       size: file.size,
       mimeType: file.type || 'application/octet-stream',
       totalChunks,
+      isLarge,
       senderId: this.transport.localPeerId,
       senderName: this.persona.name,
       senderEmoji: this.persona.emoji,
@@ -199,8 +437,9 @@ export class TransferService {
       meta,
       receivedChunks: 0,
       totalChunks,
+      bytesTransferred: 0,
       progress: 0,
-      status: 'transferring',
+      status: isLarge ? 'pending-decision' : 'transferring',
       blob: file,
       blobUrl,
       mediaCategory,
@@ -211,12 +450,37 @@ export class TransferService {
     this.transfers.set(transferId, item);
     this.notify(item);
 
-    // Send metadata action
     const targetPeerId = recipient?.id;
     this.transport.sendAction('file-meta', meta, targetPeerId);
 
-    // Slice and send chunks
+    const out: ActiveOutgoingTransfer = {
+      meta,
+      telemetry: createTransferTelemetry(file.size),
+      cancelled: false,
+    };
+    this.outgoing.set(transferId, out);
+
+    // If large file, wait for recipient to accept
+    if (isLarge) {
+      await new Promise<boolean>((resolve, reject) => {
+        out.decisionResolve = resolve;
+        out.decisionReject = reject;
+      });
+    }
+
+    if (out.cancelled) {
+      throw new Error('Transfer cancelled');
+    }
+
+    item.status = 'transferring';
+    this.notify(item);
+
+    // Stream chunks
     for (let i = 0; i < totalChunks; i++) {
+      if (out.cancelled) {
+        throw new Error('Transfer cancelled');
+      }
+
       const start = i * this.chunkSize;
       const end = Math.min(start + this.chunkSize, file.size);
       const slice = file.slice(start, end);
@@ -231,33 +495,45 @@ export class TransferService {
 
       this.transport.sendAction('file-chunk', chunkPayload, targetPeerId);
 
-      item.receivedChunks = i + 1;
-      item.progress = (i + 1) / totalChunks;
-      this.notify(item);
+      // On sender side, also track local upload progress if no ack received yet
+      if (!isLarge) {
+        item.receivedChunks = i + 1;
+        item.bytesTransferred = end;
+        item.progress = (i + 1) / totalChunks;
+        this.notify(item);
+      }
 
-      // Yield briefly to prevent freezing UI on larger files
-      if (i % 8 === 0) {
+      if (i % 4 === 0) {
         await new Promise((r) => setTimeout(r, 0));
       }
     }
 
     item.status = 'completed';
     item.progress = 1;
+    item.eta = '0s';
+    this.outgoing.delete(transferId);
     this.notify(item);
 
     return item;
   }
 
+  exportTransfer(transferId: string): void {
+    const item = this.transfers.get(transferId);
+    if (!item?.blob) return;
+    exportFileToDisk(item.blob, item.meta.name);
+  }
+
   destroy(): void {
-    if (this.unsubMeta) {
-      this.unsubMeta();
-      this.unsubMeta = null;
+    for (const u of this.unsubs) u();
+    this.unsubs = [];
+
+    for (const inc of this.incoming.values()) {
+      if (inc.ackTimer) clearInterval(inc.ackTimer);
+      if (inc.sink) inc.sink.abort().catch(() => {});
     }
-    if (this.unsubChunk) {
-      this.unsubChunk();
-      this.unsubChunk = null;
-    }
-    // Clean up created object URLs
+    this.incoming.clear();
+    this.outgoing.clear();
+
     for (const item of this.transfers.values()) {
       if (item.blobUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
         try {
@@ -268,7 +544,6 @@ export class TransferService {
       }
     }
     this.transfers.clear();
-    this.incomingBuffers.clear();
     this.updateListeners.clear();
   }
 }

@@ -6,9 +6,14 @@
     transfer: FileTransferItem;
     isSelf: boolean;
     onOpenImage?: (src: string, name: string, size: number) => void;
+    onAccept?: (transferId: string) => void;
+    onDecline?: (transferId: string) => void;
+    onCancel?: (transferId: string) => void;
+    onExport?: (transferId: string) => void;
   }
 
-  const { transfer, isSelf, onOpenImage }: Props = $props();
+  const { transfer, isSelf, onOpenImage, onAccept, onDecline, onCancel, onExport }: Props =
+    $props();
 
   function formatTime(timestamp: number): string {
     const d = new Date(timestamp);
@@ -55,11 +60,67 @@
       <span class="category-icon">{getCategoryIcon(transfer.mediaCategory)}</span>
       <div class="file-details">
         <div class="file-name" title={transfer.meta.name}>{transfer.meta.name}</div>
-        <div class="file-size">{formatFileSize(transfer.meta.size)}</div>
+        <div class="file-size">
+          {formatFileSize(transfer.meta.size)}
+          {#if transfer.meta.isLarge}
+            <span class="badge-large">Large File (OPFS)</span>
+          {/if}
+        </div>
       </div>
     </div>
 
-    {#if transfer.status === 'transferring'}
+    {#if transfer.status === 'pending-decision'}
+      <div class="pending-section" data-testid="pending-section">
+        {#if !isSelf}
+          <div class="decision-prompt">
+            <span class="decision-text"
+              >Incoming file ({formatFileSize(transfer.meta.size)}). Accept to stream directly to
+              disk.</span
+            >
+            <div class="decision-actions">
+              <button
+                type="button"
+                class="btn-accept"
+                data-testid="accept-transfer-btn"
+                onclick={() => onAccept?.(transfer.id)}
+              >
+                ✓ Accept & Download
+              </button>
+              <button
+                type="button"
+                class="btn-decline"
+                data-testid="decline-transfer-btn"
+                onclick={() => onDecline?.(transfer.id)}
+              >
+                ✕ Decline
+              </button>
+            </div>
+          </div>
+        {:else}
+          <div class="waiting-prompt">
+            <span class="waiting-text">Waiting for recipient to accept...</span>
+            <button
+              type="button"
+              class="btn-cancel"
+              data-testid="cancel-transfer-btn"
+              onclick={() => onCancel?.(transfer.id)}
+            >
+              Cancel
+            </button>
+          </div>
+        {/if}
+      </div>
+    {:else if transfer.status === 'declined'}
+      <div class="status-badge-row">
+        <span class="declined-badge" data-testid="declined-badge">
+          ✕ Transfer declined by recipient
+        </span>
+      </div>
+    {:else if transfer.status === 'cancelled'}
+      <div class="status-badge-row">
+        <span class="cancelled-badge" data-testid="cancelled-badge"> ⊘ Transfer cancelled </span>
+      </div>
+    {:else if transfer.status === 'transferring'}
       <div class="progress-section" data-testid="transfer-progress">
         <div class="progress-bar-bg">
           <div
@@ -68,8 +129,23 @@
           ></div>
         </div>
         <div class="progress-label">
-          <span>Transferring...</span>
           <span>{Math.round(transfer.progress * 100)}%</span>
+          <span class="telemetry-info" data-testid="transfer-telemetry">
+            {#if transfer.speed}
+              {transfer.speed} • ETA: {transfer.eta || '--'}
+            {:else}
+              Transferring...
+            {/if}
+          </span>
+          <button
+            type="button"
+            class="btn-cancel-inline"
+            data-testid="cancel-transfer-btn"
+            onclick={() => onCancel?.(transfer.id)}
+            title="Cancel transfer"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     {:else if transfer.status === 'completed'}
@@ -104,16 +180,27 @@
         {/if}
       </div>
 
-      {#if transfer.blobUrl}
+      {#if transfer.blobUrl || transfer.blob}
         <div class="actions-section">
-          <a
-            href={transfer.blobUrl}
-            download={transfer.meta.name}
-            class="btn-download"
-            data-testid="download-btn"
-          >
-            ⬇ Download ({formatFileSize(transfer.meta.size)})
-          </a>
+          {#if transfer.blobUrl}
+            <a
+              href={transfer.blobUrl}
+              download={transfer.meta.name}
+              class="btn-download"
+              data-testid="download-btn"
+            >
+              ⬇ Download ({formatFileSize(transfer.meta.size)})
+            </a>
+          {:else}
+            <button
+              type="button"
+              class="btn-download"
+              data-testid="download-btn"
+              onclick={() => onExport?.(transfer.id)}
+            >
+              ⬇ Export ({formatFileSize(transfer.meta.size)})
+            </button>
+          {/if}
         </div>
       {/if}
     {/if}
@@ -208,8 +295,109 @@
   }
 
   .file-size {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     font-size: 0.75rem;
     color: var(--text-muted);
+  }
+
+  .badge-large {
+    font-size: 0.625rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+  }
+
+  .pending-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 0.5rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px dashed var(--card-border);
+  }
+
+  .decision-prompt {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .decision-text {
+    font-size: 0.75rem;
+    color: #e2e8f0;
+  }
+
+  .decision-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .btn-accept {
+    padding: 0.35rem 0.75rem;
+    background: #10b981;
+    color: #ffffff;
+    border: none;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-accept:hover {
+    background: #059669;
+  }
+
+  .btn-decline {
+    padding: 0.35rem 0.75rem;
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-decline:hover {
+    background: rgba(239, 68, 68, 0.3);
+  }
+
+  .waiting-prompt {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .btn-cancel {
+    padding: 0.25rem 0.5rem;
+    background: transparent;
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 0.375rem;
+    font-size: 0.6875rem;
+    cursor: pointer;
+  }
+
+  .status-badge-row {
+    font-size: 0.75rem;
+  }
+
+  .declined-badge {
+    color: #f87171;
+    font-size: 0.75rem;
+  }
+
+  .cancelled-badge {
+    color: var(--text-muted);
+    font-size: 0.75rem;
   }
 
   .progress-section {
@@ -235,9 +423,28 @@
 
   .progress-label {
     display: flex;
+    align-items: center;
     justify-content: space-between;
     font-size: 0.6875rem;
     color: var(--text-muted);
+  }
+
+  .telemetry-info {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: #a5b4fc;
+  }
+
+  .btn-cancel-inline {
+    background: none;
+    border: none;
+    color: #f87171;
+    font-size: 0.6875rem;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .btn-cancel-inline:hover {
+    text-decoration: underline;
   }
 
   .preview-section {
@@ -349,8 +556,10 @@
     color: #ffffff;
     font-size: 0.75rem;
     font-weight: 500;
+    border: none;
     border-radius: 0.5rem;
     text-decoration: none;
+    cursor: pointer;
     transition: background 0.15s;
   }
 
