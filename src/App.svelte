@@ -16,6 +16,7 @@
   import type { FileTransferItem } from './lib/transfer/types';
   import { InMemoryTransport } from './lib/transport/in-memory-transport';
   import type { PeerInfo, RoomTransport } from './lib/transport/types';
+  import VoiceNoteRecorder from './lib/voice/VoiceNoteRecorder.svelte';
 
   interface Props {
     transport?: RoomTransport;
@@ -323,6 +324,10 @@
         }, 5000);
       }
     }
+  }
+
+  async function handleSendVoiceNote(file: File) {
+    await handleSendFiles([file]);
   }
 
   function handleAcceptTransfer(transferId: string) {
@@ -791,6 +796,13 @@
                 onchange={handleFileInputChange}
               />
             </label>
+
+            <VoiceNoteRecorder
+              recipientName={selectedRecipientId === 'everyone'
+                ? 'Everyone'
+                : connectedPeers.find((p) => p.id === selectedRecipientId)?.name || 'Selected Peer'}
+              onSend={handleSendVoiceNote}
+            />
           </div>
         </div>
 

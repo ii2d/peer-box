@@ -469,4 +469,57 @@ describe('PeerBox App Component', () => {
     unmount(component);
     target.remove();
   });
+
+  it('renders voice note record button and custom waveform player for audio transfers', async () => {
+    window.history.replaceState({}, '', '/voice-room');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('user-local');
+    const transport2 = new InMemoryTransport('remote-peer');
+    const component = mount(App, { target, props: { transport: transport1 } });
+
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    // Verify mic button is present
+    const micBtn = target.querySelector<HTMLButtonElement>('[data-testid="mic-record-btn"]');
+    expect(micBtn).not.toBeNull();
+
+    // Remote peer joins and transfers an audio file
+    await transport2.joinRoom({ roomId: 'voice-room' });
+    flushSync();
+
+    transport2.sendAction('file-meta', {
+      id: 'voice_transfer_test',
+      name: 'voice-note-123.webm',
+      size: 3,
+      mimeType: 'audio/webm',
+      totalChunks: 1,
+      senderId: 'remote-peer',
+      senderName: 'Sunny Fox',
+      senderEmoji: '🦊',
+      senderColor: '#f97316',
+      recipientId: null,
+      isPrivate: false,
+      timestamp: Date.now(),
+    });
+
+    transport2.sendAction('file-chunk', {
+      transferId: 'voice_transfer_test',
+      chunkIndex: 0,
+      data: 'AQID', // base64 [1, 2, 3]
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+    flushSync();
+
+    // Verify audio preview rendered custom waveform player
+    expect(target.querySelector('[data-testid="audio-preview"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="waveform-player"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="audio-play-pause-btn"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="audio-scrubber"]')).not.toBeNull();
+
+    unmount(component);
+    target.remove();
+  });
 });

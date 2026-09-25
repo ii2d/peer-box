@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatFileSize } from './media-type';
   import type { FileTransferItem } from './types';
+  import WaveformPlayer from '../voice/WaveformPlayer.svelte';
 
   interface Props {
     transfer: FileTransferItem;
@@ -163,7 +164,7 @@
           </button>
         {:else if transfer.mediaCategory === 'audio' && transfer.blobUrl}
           <div class="audio-container" data-testid="audio-preview">
-            <audio controls src={transfer.blobUrl} preload="metadata" class="audio-player"></audio>
+            <WaveformPlayer src={transfer.blobUrl} fileName={transfer.meta.name} />
           </div>
         {:else if transfer.mediaCategory === 'video' && transfer.blobUrl}
           <div class="video-container" data-testid="video-preview">
@@ -492,11 +493,6 @@
 
   .audio-container {
     width: 100%;
-  }
-
-  .audio-player {
-    width: 100%;
-    height: 38px;
   }
 
   .video-container {
