@@ -11,7 +11,7 @@ Peers frequently need to exchange real-time messages, visual captures, voice mem
 
 PeerBox is a 100% serverless, zero-knowledge peer-to-peer web application statically hosted on GitHub Pages (`peer-box.ii2d.com`). Built using Svelte 5 and Trystero WebRTC, PeerBox allows peers to create protected ephemeral rooms identified by random adjective-noun pairs (e.g. `cute-dog`) or custom names.
 
-Signaling leverages Nostr relays (via standard secure WebSockets) with automatic BitTorrent tracker fallback. Rooms are protected by AES-GCM encryption keys derived directly from the Room Key; keys are preserved in client-side URL hashes so they are never exposed to server access logs. Transfers automatically stream directly into the Origin Private File System (OPFS) for files ≥25MB with accept/decline consent and real-time telemetry (speed & ETA), while files <25MB transfer instantly with inline media playback and voice memos. Direct P2P connectivity operates strictly without TURN relay servers, providing live ICE connection health diagnostics.
+Signaling leverages Nostr relays (via standard secure WebSockets) with automatic BitTorrent tracker fallback. Rooms are protected by AES-GCM encryption keys derived directly from the Room Key; keys are preserved in client-side URL hashes so they are never exposed to server access logs. Transfers automatically stream directly into the Origin Private File System (OPFS) for files ≥25MB with accept/decline consent and real-time telemetry (speed & ETA), while files <25MB transfer instantly with inline media playback and voice memos. Direct P2P connectivity operates strictly without TURN relay servers, providing live ICE connection health diagnostics and transparent Trust Guarantee disclosures.
 
 ## User Stories
 
@@ -47,6 +47,7 @@ Signaling leverages Nostr relays (via standard secure WebSockets) with automatic
 30. As a peer transferring files, I want to view smoothed real-time transfer telemetry (throughput in KB/s or MB/s via a 1s EMA window and dynamic ETA), backed by dual-sided 500ms acknowledgements, so that both sender and receiver see synchronized, jitter-free progress.
 31. As a peer, I want an instant screen grab button to capture a frame via `navigator.mediaDevices.getDisplayMedia`, stop stream tracks immediately for privacy, and review the image in a floating preview tray before sending, so that I can share visual context without accidental broadcasts.
 32. As a peer, I want to inspect live WebRTC connection health and ICE candidate indicators (`host` for Direct LAN vs `srflx` for Direct P2P via STUN, with zero TURN relay servers used or required), with clear diagnostic guidance if symmetric NAT firewalls prevent a direct connection.
+33. As a privacy-conscious peer, I want to see clear Trust Guarantee badges on the landing view and click an in-room Privacy Shield to review verifiable architectural assurances (Zero Servers, End-to-End Encryption with Room Key, Ephemeral Memory, and transparent Direct P2P public IP exposure), so that I have complete confidence in the security of my data.
 
 ## Implementation Decisions
 
@@ -61,22 +62,27 @@ The codebase organizes around a single deep seam at the transport layer:
 - **Production Adapter (`TrysteroTransport`)**: Bridges to Trystero Nostr/Torrent implementations and browser `RTCPeerConnection.getStats()`.
 - **Test Adapter (`InMemoryTransport`)**: In-memory event bus simulating connected virtual peers, latency stats, and chunk dispatch in Vitest.
 
-### File Transfer State Machine & OPFS Streaming
-- Chunked protocol with metadata announcements (`file-meta`), binary data chunks (`file-chunk`), transfer acknowledgements (`file-ack`), and cancellations (`file-cancel`).
-- Thresholding:
-  - Files `< 25MB`: Automatically accepted into in-memory blobs for immediate rendering (image lightboxes, waveform audio, video players).
+### File Transfer Protocol, Streaming & Telemetry
+- Message payloads are segmented into metadata announcements (`file-meta`), binary data chunks (`file-chunk`), transfer acknowledgements (`file-ack`), and cancellations (`file-cancel`).
+- **Transfer Threshold**:
+  - Files `< 25MB`: Automatically accepted and buffered into memory blobs for immediate rendering (image lightboxes, waveform audio, video players).
   - Files `≥ 25MB`: Displays an incoming consent card. When accepted, chunks stream directly to Origin Private File System (`navigator.storage.getDirectory()`) writable streams to prevent heap exhaustion.
-- Telemetry: Throughput calculated via a 1-second Exponential Moving Average (EMA) window, with 500ms dual-sided acknowledgements synchronizing sender and receiver progress bars and dynamic ETA.
+- **Telemetry**: Throughput calculated via a 1-second Exponential Moving Average (EMA) window, with 500ms dual-sided acknowledgements synchronizing sender and receiver progress bars and dynamic ETA.
 
 ### Screen Grab Capture
 - Captures a single still video frame using `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })` drawn onto an offscreen canvas.
-- Immediately stops all media stream tracks upon frame capture, guaranteeing zero persistent recording indicators.
+- Immediately stops all media stream tracks upon frame capture, guaranteeing zero ongoing streaming overhead or background recording indicators.
 - Displays a floating preview tray above the message composer for review, recipient selection, and optional captioning before dispatch.
 
 ### WebRTC Connection Health & Zero-TURN Architecture
 - Operates with strict zero-TURN constraints (respects `docs/adr/0001-zero-turn-relay-architecture.md`).
 - Polls `RTCPeerConnection.getStats()` every 2–3s to extract active candidate-pair details (`host` for Direct LAN, `srflx` for Direct P2P via STUN, latency in ms).
 - Displays live latency pills and diagnostic guidance if symmetric NAT firewalls prevent a direct connection.
+
+### Trust Guarantee & Privacy Presentation
+- Non-intrusive Trust Guarantee badges on the landing view: `🔒 End-to-End Encrypted`, `⚡ Direct P2P (No Servers)`, `🧹 Zero Logs & Cookies`.
+- Persistent in-room header button (`🛡️ Private & Ephemeral`) opening a modal with 4 visual summary cards: Zero Servers, Room Key Encryption, Ephemeral Memory, and Transparent Direct P2P Public IP Disclosure (respects `docs/adr/0004-transparent-webrtc-ip-disclosure.md`).
+- Expandable technical verification sections detailing Web Crypto AES-GCM, zero-knowledge URL hashes, and Nostr WSS signaling.
 
 ### SPA Routing & Deployment
 - GitHub Pages SPA routing using a `404.html` redirect script that maps `/cute-dog#key=...` through `/?p=/cute-dog#key=...` restored via `history.replaceState`.
@@ -96,6 +102,7 @@ The codebase organizes around a single deep seam at the transport layer:
   - Screen grab frame capture and immediate track termination.
   - Persona generation and persistence.
   - URL hash parsing and safe key extraction.
+  - Trust Guarantee dialog rendering and modal toggle state.
 - **Prior Art**: Svelte 5 testing via Vitest + JSDOM (`src/App.test.ts`).
 
 ## Out of Scope
