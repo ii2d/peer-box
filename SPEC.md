@@ -1,15 +1,15 @@
 # Specification: PeerBox Serverless P2P Room Chat & Chunked File Transfer
 
 **Issue**: [#1](https://github.com/ii2d/peer-box/issues/1)  
-**Status**: `ready-for-agent`
+**Triage Label**: `ready-for-agent`
 
 ## Problem Statement
 
-Peers often need to quickly exchange sensitive or large files, media, and real-time messages between devices or with collaborators without creating accounts, installing native software, or uploading private data to third-party cloud servers. Existing web-based file transfer tools frequently suffer from corporate firewall blockades, lack true end-to-end room encryption, cap transfers at low limits, or crash browser tabs when transferring multi-hundred-megabyte or gigabyte files.
+Peers frequently need to exchange real-time messages, visual captures, voice memos, and large files directly between devices or collaborators without creating accounts, installing desktop software, or uploading private data to intermediate cloud servers. Existing web-based transfer solutions frequently suffer from corporate firewall blockades, lack true end-to-end room encryption, enforce low file size limits, or crash browser tabs when transferring multi-hundred-megabyte or gigabyte files.
 
 ## Solution
 
-PeerBox is a 100% serverless, zero-knowledge peer-to-peer web application hosted statically on GitHub Pages (`peer-box.ii2d.com`). Built on top of Trystero and WebRTC, PeerBox allows peers to create protected ephemeral rooms using memorable random word pairs (e.g. `cute-dog`) or custom identifiers. 
+PeerBox is a 100% serverless, zero-knowledge peer-to-peer web application statically hosted on GitHub Pages (`peer-box.ii2d.com`). Built using Svelte 5 and Trystero WebRTC, PeerBox allows peers to create protected ephemeral rooms identified by random adjective-noun pairs (e.g. `cute-dog`) or custom names.
 
 Signaling leverages Nostr relays (via standard secure WebSockets) with automatic BitTorrent tracker fallback. Rooms are protected by AES-GCM encryption keys derived directly from the Room Key; keys are preserved in client-side URL hashes so they are never exposed to server access logs. Transfers automatically stream directly into the Origin Private File System (OPFS) for files ≥25MB with accept/decline consent and real-time telemetry (speed & ETA), while files <25MB transfer instantly with inline media playback and voice memos. Direct P2P connectivity operates strictly without TURN relay servers, providing live ICE connection health diagnostics.
 
@@ -50,68 +50,53 @@ Signaling leverages Nostr relays (via standard secure WebSockets) with automatic
 
 ## Implementation Decisions
 
-### 1. Signaling & Encryption Engine
-- Use **Trystero** with Nostr (`trystero/nostr`) as the default signaling mechanism over secure WebSockets (`wss://`). BitTorrent (`trystero/torrent`) is retained as an alternative or fallback strategy (see `docs/adr/0002-nostr-signaling-with-torrent-fallback.md`).
-- Protection leverages Trystero's native room configuration: `joinRoom({ appId, password: roomKey }, roomId)`. Trystero uses the Room Key as an AES-GCM encryption key to secure all signaling handshakes and peer-to-peer data channels.
-- When sharing a room URL, the Room Key is encoded exclusively in the URL hash fragment (`#key=<roomKey>`), ensuring it never touches server access logs (see `docs/adr/0003-key-in-hash-fragment.md`).
+### Signaling & End-to-End Encryption
+- Primary matchmaking runs via Nostr relays over secure WebSockets (`wss://`), traversing enterprise firewalls that restrict torrent protocols. BitTorrent trackers serve as fallback (respects `docs/adr/0002-nostr-signaling-with-torrent-fallback.md`).
+- Room Keys are used directly as AES-GCM encryption keys for peer discovery and data encryption.
+- Room Keys in shared links remain exclusively in URL hash fragments (`#key=...`), ensuring they are never logged by GitHub Pages or web proxies (respects `docs/adr/0003-key-in-hash-fragment.md`).
 
-### 2. Testing Seam: `RoomTransport` Interface
-To maintain a deep module architecture with minimal test seams, the entire application couples to a single mockable transport interface:
-- **`RoomTransport`**: Encapsulates room lifecycle, peer join/leave events, typed action messaging, telemetry polling, and binary file chunk streaming.
-- **`TrysteroTransport`**: The production adapter delegating to Trystero Nostr/Torrent implementations.
-- **`InMemoryTransport`**: The test adapter providing an in-memory event bus that connects virtual peer instances in Vitest without real WebRTC or network sockets.
+### Testing Seam: `RoomTransport`
+The codebase organizes around a single deep seam at the transport layer:
+- **`RoomTransport` Interface**: Encapsulates room lifecycle, peer join/leave events, typed action messaging, telemetry polling, and binary chunk streaming.
+- **Production Adapter (`TrysteroTransport`)**: Bridges to Trystero Nostr/Torrent implementations and browser `RTCPeerConnection.getStats()`.
+- **Test Adapter (`InMemoryTransport`)**: In-memory event bus simulating connected virtual peers, latency stats, and chunk dispatch in Vitest.
 
-### 3. File Transfer Protocol, Streaming & Telemetry
-- Message payloads are segmented into metadata announcements (`file-meta`), binary data chunks (`file-chunk`), transfer acknowledgements (`file-ack`), and cancellations (`file-cancel`).
-- **Transfer Threshold**:
-  - Files `< 25MB`: Automatically accepted and buffered into memory blobs for immediate rendering.
-  - Files `≥ 25MB`: Triggers an incoming request card. On acceptance, chunks stream into a file handle backed by the Origin Private File System (`navigator.storage.getDirectory()`), preventing heap exhaustion.
-- **Transfer Telemetry**: Calculate rolling average throughput over a 1-second Exponential Moving Average (EMA) window from byte chunk receipts, rendering real-time transfer speed (KB/s, MB/s) and estimated time remaining (ETA). The receiver dispatches a `progress-ack` every 500ms to keep sender and receiver progress displays tightly synchronized.
-- Inline media viewer components render images in lightboxes, audio in custom waveform players, video in HTML5 video elements, and code files in syntax-highlighted containers.
+### File Transfer State Machine & OPFS Streaming
+- Chunked protocol with metadata announcements (`file-meta`), binary data chunks (`file-chunk`), transfer acknowledgements (`file-ack`), and cancellations (`file-cancel`).
+- Thresholding:
+  - Files `< 25MB`: Automatically accepted into in-memory blobs for immediate rendering (image lightboxes, waveform audio, video players).
+  - Files `≥ 25MB`: Displays an incoming consent card. When accepted, chunks stream directly to Origin Private File System (`navigator.storage.getDirectory()`) writable streams to prevent heap exhaustion.
+- Telemetry: Throughput calculated via a 1-second Exponential Moving Average (EMA) window, with 500ms dual-sided acknowledgements synchronizing sender and receiver progress bars and dynamic ETA.
 
-### 4. Screen Grab & Instant Snapshot
-- Implement an instant screen capture utility invoking `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })`.
-- Captures a single still video frame drawn onto an offscreen canvas and encoded as an image blob, immediately calling `.stop()` on all media stream tracks to guarantee zero ongoing streaming overhead or background recording indicators.
-- Displays a floating preview tray above the message composer with "Send", "Add caption", and "Cancel" buttons to prevent accidental exposure of private desktop contents.
+### Screen Grab Capture
+- Captures a single still video frame using `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })` drawn onto an offscreen canvas.
+- Immediately stops all media stream tracks upon frame capture, guaranteeing zero persistent recording indicators.
+- Displays a floating preview tray above the message composer for review, recipient selection, and optional captioning before dispatch.
 
-### 5. WebRTC Connection Health & Zero-TURN ICE Diagnostics
-- In accordance with `docs/adr/0001-zero-turn-relay-architecture.md`, no TURN relay servers are deployed, maintained, or configured.
-- Periodically inspect `RTCPeerConnection.getStats()` on active peer connections.
-- Extract the active `candidate-pair`: round-trip time (`currentRoundTripTime`), connection state (`connected`, `checking`, `disconnected`), and candidate types (`host` for direct LAN connection vs `srflx` for public STUN NAT traversal).
-- Surface a subtle ping badge (`⚡ 12ms Direct LAN` or `🌐 65ms Direct P2P`) with a diagnostic drawer explaining symmetric NAT blockades when connections cannot be established.
+### WebRTC Connection Health & Zero-TURN Architecture
+- Operates with strict zero-TURN constraints (respects `docs/adr/0001-zero-turn-relay-architecture.md`).
+- Polls `RTCPeerConnection.getStats()` every 2–3s to extract active candidate-pair details (`host` for Direct LAN, `srflx` for Direct P2P via STUN, latency in ms).
+- Displays live latency pills and diagnostic guidance if symmetric NAT firewalls prevent a direct connection.
 
-### 6. Recipient Targeting Model
-- The send interface exposes a recipient selector defaulting to `"everyone"` (broadcast).
-- When a specific connected peer is selected, Trystero's targeted action dispatch is invoked (`action.send(payload, peerId)`), and the item in the sender and recipient timelines receives a private message badge.
-
-### 7. Storage Persistence Strategy
-- Storage is managed by a pluggable storage module defaulting to an in-memory store.
-- If the user toggles "Persist chat locally", the storage adapter switches to IndexedDB, saving chat logs and file transfer receipts keyed by room ID.
-
-### 8. GitHub Pages SPA Routing
-- Vite configuration produces a single-page distribution with custom domain `CNAME` for `peer-box.ii2d.com`.
-- SPA navigation relies on a `404.html` redirect script that captures clean paths (e.g. `/cute-dog`) and query/hash parameters, redirecting to `/?p=/cute-dog` which is immediately restored via `history.replaceState`.
-
-### 9. Security & CI/CD Pipeline
-- GitHub Actions CI workflow runs:
-  - `pnpm audit --audit-level=high` for dependency vulnerability auditing.
-  - Static security analysis via GitHub CodeQL (`.github/workflows/codeql.yml`).
-  - Automated secret scanning (Gitleaks).
-  - TypeScript typechecking (`svelte-check`), linting (`eslint`), and unit testing (`vitest`).
-  - Automated static build deployment to GitHub Pages.
-- MIT License included in the repository.
+### SPA Routing & Deployment
+- GitHub Pages SPA routing using a `404.html` redirect script that maps `/cute-dog#key=...` through `/?p=/cute-dog#key=...` restored via `history.replaceState`.
+- Automated GitHub Actions workflow (`deploy.yml`) with:
+  - `pnpm audit --audit-level=high`
+  - GitHub CodeQL SAST workflow
+  - Gitleaks secret scanning
+  - Typecheck, unit tests, and production build with CNAME `peer-box.ii2d.com`.
 
 ## Testing Decisions
 
-- **Definition of Good Tests**: Tests verify observable user and peer behaviors through the `RoomTransport` seam rather than internal state variables or private functions.
+- **Test Quality Standard**: Tests must verify observable user behavior through the `RoomTransport` seam rather than asserting on private state variables or mocking internal functions.
 - **Modules Tested**:
-  - Room connection lifecycle: Joining rooms, room key negotiation, peer arrival, peer departure.
-  - Messaging and Recipient Targeting: Broadcasting to everyone versus direct peer delivery.
-  - File Transfer State Machine: Chunking, reassembly, auto-download threshold (<25MB), consent approval (≥25MB), progress reporting, telemetry (speed/ETA), and cancellation.
-  - Screen Grab Pipeline: Frame capture to blob conversion and immediate track closure.
-  - Nickname and Persona Generation: Deterministic persona assignment and persistent custom nickname updates.
-  - SPA Routing & Hash Parsing: Safe extraction of room IDs and room keys from URLs.
-- **Prior Art**: Svelte 5 component testing via Vitest + JSDOM (`src/App.test.ts`).
+  - Room lifecycle (joining, key derivation, peer presence).
+  - Messaging and recipient targeting (broadcast vs targeted peer delivery).
+  - File transfer state machine (chunking, reassembly, <25MB auto-download, ≥25MB prompt, cancellation, telemetry).
+  - Screen grab frame capture and immediate track termination.
+  - Persona generation and persistence.
+  - URL hash parsing and safe key extraction.
+- **Prior Art**: Svelte 5 testing via Vitest + JSDOM (`src/App.test.ts`).
 
 ## Out of Scope
 
