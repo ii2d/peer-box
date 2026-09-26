@@ -7,6 +7,7 @@ Peers currently interact with PeerBox through a narrow, centered modal card cons
 ## Solution
 
 Transform PeerBox into a responsive, full-window application with a dual presentation architecture:
+
 1. **Public SEO & AI-SEO Portal (`/`)**: An above-the-fold interactive hero for instantaneous 1-click room creation and joining, combined with an extensive below-the-fold semantic showcase detailing the zero-server trust model, chunked OPFS file transfers, voice notes, and structured FAQ schema (`SoftwareApplication` & `FAQPage` JSON-LD).
 2. **Full-Window In-Room Workspace (`/<room>#key=...`)**: An edge-to-edge (`100vw` × `100dvh`) 2-column workspace on desktop featuring a dedicated **Roster** (Room metadata, encryption status, Persona profile, active Peers with live WebRTC latency badges, diagnostics) and an expansive **Timeline** and pinned **Composer**.
 3. **Responsive Mobile Shell**: An adaptive mobile layout (`<768px`) where the Roster collapses into an off-canvas drawer with backdrop blur, and the Timeline and Composer utilize `100dvh` and safe-area insets (`env(safe-area-inset-bottom)`) to prevent virtual keyboard disruption.

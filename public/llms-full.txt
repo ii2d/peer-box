@@ -1,0 +1,85 @@
+# PeerBox - Full Technical Agent Brief & Architecture Specification
+
+> Complete machine-readable technical reference for LLM search engines, AI developer agents, and automated security audit tools.
+
+- Canonical URL: https://peer-box.ii2d.com
+- Repository: https://github.com/ii2d/peer-box
+- License: Open Source (MIT)
+- Hosting: Static GitHub Pages (zero compute, zero databases, zero relays)
+
+---
+
+## 1. Architectural Principles & ADR Summary
+
+PeerBox adheres strictly to five foundational Architectural Decision Records (ADRs):
+
+### ADR-0001: Zero-TURN Relay Architecture
+PeerBox exclusively establishes direct WebRTC connections via Local LAN (`host` candidate pairs) and public STUN NAT traversal (`srflx` candidate pairs). PeerBox explicitly refuses to deploy, configure, or utilize TURN relay servers.
+- **Trade-off**: In strict double-symmetric enterprise NAT firewalls, direct peer connections cannot form. In exchange, the project eliminates 100% of recurring infrastructure hosting costs, avoids central bandwidth bottlenecks, and prevents central servers from having access or liability for relaying user packets.
+
+### ADR-0002: Nostr Signaling with BitTorrent Fallback
+PeerBox orchestrates initial WebRTC session negotiation (SDP offers, answers, ICE candidates) via ephemeral WebSocket connections to public Nostr relays (NIP-01 / NIP-04 style ephemeral events) using the Trystero network library. If Nostr relays are partitioned or blocked, signaling automatically falls back to BitTorrent tracker swarms.
+- **Security**: Signaling payloads are end-to-end encrypted with keys derived from the room identifier and optional Room Key. Relays see only encrypted blobs and cannot discover peer contents.
+
+### ADR-0003: Key Isolation in URL Hash Fragment
+When a peer creates or shares a password-protected Room, the secret Room Key is placed strictly in the URL hash fragment (e.g. `https://peer-box.ii2d.com/#key=secret-phrase` or `https://peer-box.ii2d.com/room-name#key=secret-phrase`).
+- **Cryptographic Isolation**: RFC 3986 dictates that URL fragments are client-only and are NEVER transmitted in HTTP request headers to web servers or DNS providers. Intermediate proxies, CDNs, and GitHub Pages infrastructure have zero mathematical visibility into the Room Key.
+
+### ADR-0004: Transparent WebRTC IP Disclosure
+Because WebRTC establishes direct peer-to-peer UDP channels between browser sockets, participating peers inherently discover each other's public or local IP addresses during the ICE candidate exchange. PeerBox prominently discloses this architectural reality in its Trust Guarantee modal so peers can make informed choices (e.g., opting to use a VPN when joining rooms with untrusted strangers).
+
+### ADR-0005: Full-Window Workspace & SEO Portal
+PeerBox bifurcates its presentation between a public, crawlable, semantic Portal at `/` (engineered for search engines and AI LLM discovery with structured JSON-LD, feature explainers, and architectural trust guarantees) and an edge-to-edge, full-window (`100vw` × `100dvh`) Room workspace (desktop 2-column Roster and Timeline, responsive mobile drawer).
+
+---
+
+## 2. File Transfer & Streaming Protocol
+
+PeerBox implements a chunked binary transfer protocol designed to handle both small ephemeral media and multi-gigabyte files reliably:
+
+1. **Threshold Partitioning**:
+   - **Files < 25MB**: Automatically accepted and buffered into memory `Blob`s for instant inline previewing (custom waveform audio player, HTML5 video player, image lightbox, text viewer) and 1-click download.
+   - **Files ≥ 25MB**: Emits an incoming consent prompt to the recipient. Upon explicit user acceptance, incoming chunks stream directly to Origin Private File System (`navigator.storage.getDirectory()`) writable streams to prevent browser heap memory exhaustion. If OPFS is unsupported (e.g., certain older private windows), it falls back to an in-memory chunk sink.
+
+2. **Chunk Framing & Telemetry**:
+   - **Chunk Size**: Standardized 64KB (`65,536` bytes) binary chunks.
+   - **Protocol Actions**:
+     - `file-meta`: File ID, filename, MIME type, total size, total chunks, sender Persona.
+     - `file-chunk`: File ID, chunk index, binary payload.
+     - `file-ack`: Bi-directional progress acknowledgement dispatched every 500ms.
+     - `file-cancel`: User-triggered transfer cancellation.
+   - **Telemetry Window**: Throughput (speed in KB/s or MB/s) and estimated time remaining (ETA in seconds) are computed using a 1-second Exponential Moving Average (EMA) window.
+
+---
+
+## 3. Media Features
+
+- **Voice Notes**:
+  - Captured via browser `navigator.mediaDevices.getUserMedia({ audio: true })`.
+  - Negotiates audio codecs dynamically: prefers `audio/webm;codecs=opus`, falling back to `audio/mp4` on Safari/iOS.
+  - Computes root-mean-square (RMS) microphone volume during recording for dynamic visual pulsation.
+  - Renders custom SVG waveform player with interactive scrubbing and timestamp updates.
+- **Screen Grabs**:
+  - Captured via `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })`.
+  - Captures a single still video frame drawn onto an offscreen HTML5 `HTMLCanvasElement` and encoded as a high-quality WebP/PNG image blob.
+  - Immediately invokes `track.stop()` on all video tracks, guaranteeing zero ongoing streaming overhead or background recording indicators.
+  - Provides a floating preview tray for recipient targeting and optional captioning before transmission.
+
+---
+
+## 4. Frequently Asked Questions (FAQ)
+
+### Q: Are files or messages ever uploaded to a central server?
+**A**: No. PeerBox is 100% serverless. The application code is served as static HTML/JS/CSS from GitHub Pages. All message packets, audio recordings, images, and binary file chunks travel directly across WebSockets (during Nostr signaling) and encrypted WebRTC DataChannels between peers. No intermediate server ever receives or stores transferred files.
+
+### Q: What is the maximum file size that can be transferred?
+**A**: There is no hard-coded software file size limit. PeerBox has been tested with multi-gigabyte transfers. Files ≥25MB stream directly into the browser's Origin Private File System (OPFS), preventing out-of-memory crashes even when sending 10GB+ video archives.
+
+### Q: Does PeerBox require an account, phone number, or email?
+**A**: No. PeerBox requires zero authentication, accounts, or persistent identifiers. When entering a room, a temporary randomized Persona (friendly animal name and pastel color) is generated client-side. Nicknames can be edited at any time and are stored only in client memory.
+
+### Q: Can a room host or network eavesdropper intercept my Room Key?
+**A**: No. The Room Key is contained strictly within the URL hash fragment (`#key=...`). RFC 3986 guarantees that browsers never send URL hash fragments to HTTP servers or signaling relays. Furthermore, room signaling payloads are encrypted using Web Crypto AES-GCM derived from the Room Key.
+
+### Q: How do I share a room with a mobile user?
+**A**: Open the in-room header controls and tap **Share**. PeerBox displays a high-contrast SVG QR code that any smartphone camera can scan to instantly join the room with or without the encrypted key included.

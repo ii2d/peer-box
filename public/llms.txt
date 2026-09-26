@@ -1,0 +1,35 @@
+# PeerBox
+
+> Serverless, peer-to-peer communication space for real-time messaging and direct file exchange between web browsers without central servers or intermediaries.
+
+PeerBox operates directly in the browser via WebRTC data channels and Nostr/BitTorrent signaling. It requires no user accounts, no backend database, and no TURN relay infrastructure. All file transfers, voice notes, and messages stream directly between participating peers.
+
+## Core Capabilities
+
+- **Serverless P2P Architecture**: Browser-to-browser WebRTC connections orchestrated via public decentralized Nostr relays with BitTorrent fallback. No servers store, relay, or inspect message or file content.
+- **Client-Side Room Key Isolation**: Room Keys live exclusively in the URL hash fragment (`#key=...`) and are never transmitted across HTTP requests or visible to web servers. Keys derive local Web Crypto AES-GCM encryption for room discovery.
+- **Large File OPFS Streaming**: Supports multi-gigabyte direct file transfers by streaming chunks directly to Origin Private File System (`navigator.storage.getDirectory()`) writable streams, bypassing browser heap memory limits. Small files (<25MB) stream directly into memory blobs for immediate inline viewing.
+- **Ephemeral Voice Notes**: In-browser audio recording with cross-browser Opus/WebM and AAC/MP4 codec negotiation, dynamic RMS waveform pulsation, and client-side playback.
+- **Instant Screen Grab**: Single still-frame capture via `getDisplayMedia` with offscreen canvas rendering and immediate media track termination to ensure zero ongoing streaming overhead.
+- **Zero-TURN Direct Connection**: Relies exclusively on Direct LAN (`host`) and Direct P2P via public STUN (`srflx`) NAT hole punching, ensuring zero hosting costs and total infrastructure decentralization.
+
+## Domain Vocabulary
+
+- **Portal**: The public entry surface (`/`) for creating or joining a Room, exploring architectural guarantees, and launching the offline app shell.
+- **Room**: An ephemeral virtual space where two or more peers discover each other and communicate.
+- **Room Key**: A shared secret string used to derive encryption keys for peer discovery and end-to-end data encryption.
+- **Trust Guarantee**: The verifiable architectural and cryptographic assurances (Zero Servers, End-to-End Encryption, Ephemeral Memory, Direct P2P) communicated to peers.
+- **Agent Brief**: The structured, machine-readable declaration of PeerBox's architectural guarantees, capabilities, and protocol boundaries served to AI search agents and LLM crawlers.
+- **Peer**: An individual browser instance actively participating in a Room.
+- **Persona**: The temporary display name and avatar color representing a Peer in a Room.
+- **Recipient**: The designated audience for a message or file (everyone or a targeted peer).
+- **Transfer**: The direct, peer-to-peer transmission of binary file or media data between peers.
+- **Roster**: The persistent panel or mobile drawer displaying the active Room's identity, encryption state, and participating Peers with their real-time connection telemetry.
+- **Timeline**: The chronological, full-height stream of messages, voice notes, screen grabs, and transfers exchanged within a Room.
+- **Composer**: The pinned interactive input tray used to author messages, record Voice Notes, attach files for Transfer, or trigger Screen Grabs.
+
+## Full Technical Documentation
+
+For in-depth protocol flowcharts, WebRTC connection state diagrams, cryptographic derivation details, and complete FAQ, see:
+- [Full Technical Agent Brief](https://peer-box.ii2d.com/llms-full.txt)
+- [Source Code Repository](https://github.com/ii2d/peer-box)

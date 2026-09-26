@@ -5,17 +5,205 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Serverless peer-to-peer real-time communication & chunked multi-peer file sharing"
+      content="Serverless, peer-to-peer real-time communication space for messaging and direct file exchange between web browsers without central intermediaries."
     />
     <meta name="theme-color" content="#0f172a" />
     <meta name="referrer" content="no-referrer" />
+    <link rel="canonical" href="https://peer-box.ii2d.com/" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>PeerBox - Serverless P2P Room & File Sharing</title>
+
+    <!-- Open Graph / Social Meta Tags -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://peer-box.ii2d.com/" />
+    <meta property="og:title" content="PeerBox - Serverless P2P Room & File Sharing" />
+    <meta
+      property="og:description"
+      content="Serverless, peer-to-peer real-time communication space for messaging and direct file exchange between web browsers without central intermediaries."
+    />
+    <meta property="og:image" content="https://peer-box.ii2d.com/icon-512.png" />
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PeerBox - Serverless P2P Room & File Sharing" />
+    <meta
+      name="twitter:description"
+      content="Direct browser-to-browser encrypted chat, chunked OPFS file transfer, and ephemeral voice notes with zero relay servers."
+    />
+    <meta name="twitter:image" content="https://peer-box.ii2d.com/icon-512.png" />
+
+    <!-- Multi-Entity Structured Data for AI & Search Engines -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "SoftwareApplication",
+            "name": "PeerBox",
+            "url": "https://peer-box.ii2d.com/",
+            "applicationCategory": "CommunicationApplication",
+            "operatingSystem": "All modern web browsers",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "description": "Serverless peer-to-peer web application for real-time room communication and chunked multi-peer file sharing via Trystero and WebRTC.",
+            "featureList": [
+              "Zero-server direct WebRTC architecture",
+              "Multi-gigabyte OPFS chunked streaming without heap exhaustion",
+              "Ephemeral voice notes with dynamic RMS waveform",
+              "Single-frame screen grab capture",
+              "Client-side URL hash room key encryption (#key=...)"
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Are files or messages uploaded to a central server?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. PeerBox is 100% serverless. All data streams directly browser-to-browser via WebRTC data channels with zero server storage, logging, or relaying."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What is the maximum file transfer size in PeerBox?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "There is no hard-coded file size limit. Files 25MB and larger stream directly into the browser Origin Private File System (OPFS), supporting multi-gigabyte transfers without browser memory crashes."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How does end-to-end encryption work without accounts?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "The secret Room Key resides strictly in the URL hash fragment (#key=...), which browsers never transmit over HTTP requests. Encryption keys are derived client-side via Web Crypto AES-GCM."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does PeerBox operate on mobile devices?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. PeerBox is an installable Progressive Web App (PWA) with responsive mobile controls, offline app shell caching, and instant mobile QR code room sharing."
+                }
+              }
+            ]
+          },
+          {
+            "@type": "HowTo",
+            "name": "How to create a private P2P room and share files",
+            "step": [
+              {
+                "@type": "HowToStep",
+                "name": "Generate a Room",
+                "text": "Open the PeerBox Portal and click Create Room to generate a secure random room name."
+              },
+              {
+                "@type": "HowToStep",
+                "name": "Invite Peers",
+                "text": "Share the room URL or display the high-contrast QR code for peers to scan with their smartphone camera."
+              },
+              {
+                "@type": "HowToStep",
+                "name": "Communicate and Stream Files",
+                "text": "Chat in real-time, record voice notes, or drag-and-drop any file to stream directly browser-to-browser."
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <div id="app"></div>
+    <!-- Pre-baked semantic Portal content for non-JS crawlers & AI scrapers -->
+    <div id="app">
+      <header>
+        <h1>PeerBox</h1>
+        <p>Serverless Peer-to-Peer Communication &amp; Direct File Exchange</p>
+      </header>
+
+      <main>
+        <section aria-label="Portal Entry">
+          <h2>Create or Join a Private P2P Room</h2>
+          <p>
+            Instant, zero-server encrypted rooms. No accounts, no phone numbers, no tracking
+            cookies.
+          </p>
+        </section>
+
+        <section aria-label="Core Capabilities">
+          <h2>Engineered for Privacy &amp; Performance</h2>
+          <article>
+            <h3>Multi-Gigabyte OPFS Streaming</h3>
+            <p>
+              Direct browser-to-browser chunked transfer bypassing memory limits by streaming
+              directly into the Origin Private File System.
+            </p>
+          </article>
+          <article>
+            <h3>Ephemeral Voice Notes &amp; Screen Grabs</h3>
+            <p>
+              In-browser microphone recording with dynamic RMS waveforms and instantaneous
+              still-frame screen capture without ongoing video overhead.
+            </p>
+          </article>
+          <article>
+            <h3>Zero-TURN Direct P2P</h3>
+            <p>
+              True decentralization utilizing Direct LAN and public STUN NAT hole-punching with zero
+              central relay bandwidth.
+            </p>
+          </article>
+          <article>
+            <h3>Client-Side Room Key Isolation</h3>
+            <p>
+              Room Keys live exclusively in the URL hash fragment (#key=...) and are mathematically
+              invisible to web servers.
+            </p>
+          </article>
+        </section>
+
+        <section aria-label="Frequently Asked Questions">
+          <h2>Frequently Asked Questions</h2>
+          <details open>
+            <summary>Are files or messages uploaded to a central server?</summary>
+            <p>
+              No. PeerBox is 100% serverless. All data streams directly browser-to-browser via
+              WebRTC data channels with zero server storage, logging, or relaying.
+            </p>
+          </details>
+          <details>
+            <summary>What is the maximum file transfer size in PeerBox?</summary>
+            <p>
+              There is no hard-coded file size limit. Files 25MB and larger stream directly into the
+              browser's Origin Private File System (OPFS), supporting multi-gigabyte transfers.
+            </p>
+          </details>
+          <details>
+            <summary>How does end-to-end encryption work without accounts?</summary>
+            <p>
+              The secret Room Key resides strictly in the URL hash fragment (#key=...), which
+              browsers never transmit over HTTP requests. Encryption keys are derived client-side
+              via Web Crypto AES-GCM.
+            </p>
+          </details>
+        </section>
+      </main>
+
+      <footer>
+        <p>
+          PeerBox - Open Source Serverless P2P Web Application &bull;
+          <a href="/llms.txt">Agent Brief (llms.txt)</a>
+        </p>
+      </footer>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
