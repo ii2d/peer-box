@@ -24,6 +24,10 @@
   padding: 0;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--font-family);
   background-color: var(--bg-color);
@@ -61,9 +65,9 @@ body {
   max-width: 1040px;
   margin: 0 auto;
   padding: 0.875rem 1.5rem;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 1rem;
 }
 
@@ -76,6 +80,7 @@ body {
   font-weight: 700;
   font-size: 1.15rem;
   letter-spacing: -0.02em;
+  justify-self: start;
   transition: opacity 0.15s ease;
 }
 
@@ -90,6 +95,7 @@ body {
 .docs-nav-links {
   display: flex;
   align-items: center;
+  justify-self: center;
   gap: 1.25rem;
 }
 
@@ -107,17 +113,24 @@ body {
 }
 
 .docs-nav-link.active {
-  font-weight: 600;
+  /* Keep font-weight identical to prevent character-width jitter across page transitions */
+  color: #ffffff;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.45);
 }
 
 .docs-cta-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  justify-self: end;
   gap: 0.35rem;
-  padding: 0.5rem 1rem;
+  height: 36px;
+  padding: 0 1rem;
+  box-sizing: border-box;
   font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1;
   color: #ffffff;
   background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   border: none;
@@ -149,6 +162,10 @@ body {
 }
 
 @media (max-width: 640px) {
+  .docs-header-inner {
+    display: flex;
+    justify-content: space-between;
+  }
   .docs-cta-btn {
     display: none;
   }
