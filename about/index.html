@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Architecture and features of PeerBox: direct browser-to-browser WebRTC streaming, multi-gigabyte OPFS transfers, and zero-server P2P."
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="canonical" href="https://peer-box.ii2d.com/about/" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <title>About & Architecture - PeerBox</title>
+    <link rel="stylesheet" href="/src/docs.css" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://peer-box.ii2d.com/about/" />
+    <meta property="og:title" content="About & Architecture - PeerBox" />
+    <meta
+      property="og:description"
+      content="Direct browser-to-browser encrypted communication. Multi-gigabyte OPFS streaming and zero-relay WebRTC architecture."
+    />
+
+    <!-- Multi-Entity Structured Data for AI & Search Engines -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "AboutPage",
+            "name": "About PeerBox Architecture & Features",
+            "url": "https://peer-box.ii2d.com/about/",
+            "description": "Technical specifications, core features, and architectural design of PeerBox serverless peer-to-peer web application.",
+            "mainEntity": {
+              "@type": "SoftwareApplication",
+              "name": "PeerBox",
+              "url": "https://peer-box.ii2d.com/"
+            }
+          },
+          {
+            "@type": "HowTo",
+            "name": "How to create a private P2P room and stream files directly",
+            "step": [
+              {
+                "@type": "HowToStep",
+                "name": "Generate or Enter a Room",
+                "text": "Open the PeerBox Portal at https://peer-box.ii2d.com/ and click Create Instant Room to generate a secure random room name."
+              },
+              {
+                "@type": "HowToStep",
+                "name": "Invite Peers via Direct Link or QR Code",
+                "text": "Share the room URL or display the high-contrast QR code for peers to scan with their smartphone camera."
+              },
+              {
+                "@type": "HowToStep",
+                "name": "Communicate and Stream Files",
+                "text": "Chat in real-time, record voice notes, or drag-and-drop any file to stream directly browser-to-browser via WebRTC DataChannels."
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="docs-body">
+    <header class="docs-header">
+      <div class="docs-header-inner">
+        <a href="/" class="docs-brand">
+          <span class="docs-brand-icon">📦</span>
+          <span>PeerBox</span>
+        </a>
+        <nav class="docs-nav-links" aria-label="Documentation Navigation">
+          <a href="/about/" class="docs-nav-link active">About</a>
+          <a href="/faq/" class="docs-nav-link">FAQ</a>
+          <a href="/privacy/" class="docs-nav-link">Privacy & Trust</a>
+          <a
+            href="https://github.com/ii2d/peer-box"
+            target="_blank"
+            rel="noreferrer"
+            class="docs-nav-link"
+          >
+            GitHub
+          </a>
+        </nav>
+        <a href="/" class="docs-cta-btn">Launch App →</a>
+      </div>
+    </header>
+
+    <main class="docs-main">
+      <header class="docs-hero">
+        <div class="docs-badge">Technical Overview</div>
+        <h1 class="docs-title">How PeerBox Works</h1>
+        <p class="docs-subtitle">
+          Direct browser-to-browser encrypted communication with zero servers, zero intermediate
+          relays, and zero tracking.
+        </p>
+      </header>
+
+      <!-- Section 1: Features Grid -->
+      <section class="docs-section" aria-labelledby="features-heading">
+        <h2 id="features-heading" class="docs-section-title">
+          Engineered for Privacy &amp; High-Throughput Streaming
+        </h2>
+        <p class="docs-section-desc">
+          Direct browser data channels bypass cloud servers for maximum speed and privacy.
+        </p>
+        <div class="docs-grid-2">
+          <article class="docs-card">
+            <span class="docs-card-icon">🚀</span>
+            <h3 class="docs-card-title">Multi-Gigabyte OPFS Streaming</h3>
+            <p class="docs-card-text">
+              Large transfers stream directly into your browser's Origin Private File System
+              (<code>navigator.storage.getDirectory()</code>), bypassing JavaScript heap memory
+              limits to support 10GB+ file exchanges without crashing.
+            </p>
+          </article>
+
+          <article class="docs-card">
+            <span class="docs-card-icon">🎙️</span>
+            <h3 class="docs-card-title">Ephemeral Voice Notes</h3>
+            <p class="docs-card-text">
+              Record high-fidelity audio notes with dynamic RMS volume waveforms. Audio codecs
+              (Opus/WebM or AAC/MP4) are dynamically negotiated cross-browser for instant playback.
+            </p>
+          </article>
+
+          <article class="docs-card">
+            <span class="docs-card-icon">📸</span>
+            <h3 class="docs-card-title">Instant Screen Grabs</h3>
+            <p class="docs-card-text">
+              Capture a crisp single frame from any display or window with offscreen canvas
+              rendering. Media tracks immediately stop upon capture to guarantee zero ongoing
+              streaming overhead.
+            </p>
+          </article>
+
+          <article class="docs-card">
+            <span class="docs-card-icon">⚡</span>
+            <h3 class="docs-card-title">Zero-TURN Direct P2P</h3>
+            <p class="docs-card-text">
+              Direct WebRTC connections across Local LAN and public STUN NAT hole-punching. Zero
+              relay servers means zero third-party latency and zero recurring hosting costs.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Section 2: Architecture Steps -->
+      <section class="docs-section" aria-labelledby="arch-heading">
+        <h2 id="arch-heading" class="docs-section-title">Under the Hood Architecture</h2>
+        <p class="docs-section-desc">
+          A decentralized signaling mesh orchestrates direct peer connections in three transparent
+          steps.
+        </p>
+        <div class="docs-grid-3">
+          <div class="docs-card">
+            <div class="docs-step-number">1</div>
+            <h3 class="docs-card-title">Decentralized Nostr Signaling</h3>
+            <p class="docs-card-text">
+              Browsers discover each other over public Nostr relays (or BitTorrent tracker
+              fallbacks). Signaling payloads are encrypted; relays only see opaque ciphertext.
+            </p>
+          </div>
+
+          <div class="docs-card">
+            <div class="docs-step-number">2</div>
+            <h3 class="docs-card-title">URL Hash Key Isolation</h3>
+            <p class="docs-card-text">
+              Room Keys live exclusively in the URL hash fragment (<code>#key=...</code>). Per RFC
+              3986, hash fragments are strictly client-side and are mathematically never sent to web
+              servers.
+            </p>
+          </div>
+
+          <div class="docs-card">
+            <div class="docs-step-number">3</div>
+            <h3 class="docs-card-title">Direct WebRTC DataChannels</h3>
+            <p class="docs-card-text">
+              Once NAT hole-punching succeeds via STUN, direct UDP sockets form between browsers.
+              All chat messages, audio payloads, and binary file chunks stream directly between
+              peers.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Cloud Comparison Table -->
+      <section class="docs-section" aria-labelledby="comparison-heading">
+        <h2 id="comparison-heading" class="docs-section-title">
+          Direct P2P vs Centralized Cloud Relays
+        </h2>
+        <p class="docs-section-desc">
+          Why serverless browser streaming is inherently more private and sustainable.
+        </p>
+        <div class="docs-table-wrapper">
+          <table class="docs-table">
+            <thead>
+              <tr>
+                <th>Dimension</th>
+                <th>Traditional Cloud Relays</th>
+                <th>PeerBox (Serverless P2P)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Server File Storage</strong></td>
+                <td>Stored on remote cloud disks</td>
+                <td><span class="highlight-good">0 Bytes (Pure memory / OPFS)</span></td>
+              </tr>
+              <tr>
+                <td><strong>Account / Sign-up</strong></td>
+                <td>Requires email, phone, or OAuth</td>
+                <td><span class="highlight-good">None (Ephemeral Persona)</span></td>
+              </tr>
+              <tr>
+                <td><strong>Transfer Speed</strong></td>
+                <td>Throttled cloud bandwidth tiers</td>
+                <td><span class="highlight-good">Full LAN / Direct Internet speed</span></td>
+              </tr>
+              <tr>
+                <td><strong>Encryption Visibility</strong></td>
+                <td>Server operator holds keys / logs</td>
+                <td><span class="highlight-good">Client-side Web Crypto AES-GCM</span></td>
+              </tr>
+              <tr>
+                <td><strong>Hosting Costs</strong></td>
+                <td>High recurring server &amp; relay bills</td>
+                <td><span class="highlight-good">$0 (Static GitHub Pages)</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="docs-footer">
+      <div class="docs-footer-inner">
+        <div class="docs-footer-links">
+          <a href="/" class="docs-footer-link">Home (Create Room)</a>
+          <a href="/about/" class="docs-footer-link">About & Architecture</a>
+          <a href="/faq/" class="docs-footer-link">FAQ</a>
+          <a href="/privacy/" class="docs-footer-link">Privacy & Trust</a>
+          <a href="/llms.txt" class="docs-footer-link">Agent Brief (llms.txt)</a>
+          <a
+            href="https://github.com/ii2d/peer-box"
+            target="_blank"
+            rel="noreferrer"
+            class="docs-footer-link"
+          >
+            GitHub
+          </a>
+        </div>
+        <p>PeerBox &bull; Open-source serverless P2P communication</p>
+      </div>
+    </footer>
+  </body>
+</html>

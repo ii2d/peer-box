@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Verifiable cryptographic and architectural privacy guarantees for PeerBox: zero servers, zero cookies, client-side encryption, and ephemeral memory."
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="canonical" href="https://peer-box.ii2d.com/privacy/" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <title>Privacy & Trust Guarantee - PeerBox</title>
+    <link rel="stylesheet" href="/src/docs.css" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://peer-box.ii2d.com/privacy/" />
+    <meta property="og:title" content="Privacy & Trust Guarantee - PeerBox" />
+    <meta
+      property="og:description"
+      content="Verifiable architectural and cryptographic privacy guarantees. Zero servers, zero storage, zero tracking."
+    />
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "PeerBox Privacy & Trust Guarantee",
+        "url": "https://peer-box.ii2d.com/privacy/",
+        "description": "Cryptographic and architectural privacy guarantees for PeerBox: zero servers, zero cookies, client-side encryption, and ephemeral memory.",
+        "isPartOf": {
+          "@type": "SoftwareApplication",
+          "name": "PeerBox",
+          "url": "https://peer-box.ii2d.com/"
+        }
+      }
+    </script>
+  </head>
+  <body class="docs-body">
+    <header class="docs-header">
+      <div class="docs-header-inner">
+        <a href="/" class="docs-brand">
+          <span class="docs-brand-icon">📦</span>
+          <span>PeerBox</span>
+        </a>
+        <nav class="docs-nav-links" aria-label="Documentation Navigation">
+          <a href="/about/" class="docs-nav-link">About</a>
+          <a href="/faq/" class="docs-nav-link">FAQ</a>
+          <a href="/privacy/" class="docs-nav-link active">Privacy & Trust</a>
+          <a
+            href="https://github.com/ii2d/peer-box"
+            target="_blank"
+            rel="noreferrer"
+            class="docs-nav-link"
+          >
+            GitHub
+          </a>
+        </nav>
+        <a href="/" class="docs-cta-btn">Launch App →</a>
+      </div>
+    </header>
+
+    <main class="docs-main">
+      <header class="docs-hero">
+        <div class="docs-badge">Trust Guarantee</div>
+        <h1 class="docs-title">Privacy &amp; Trust Guarantee</h1>
+        <p class="docs-subtitle">
+          PeerBox replaces corporate promises and opaque legal terms with verifiable cryptographic
+          mechanics and serverless architecture.
+        </p>
+      </header>
+
+      <!-- Trust Pillars Grid -->
+      <section class="docs-section" aria-labelledby="core-assurances">
+        <h2 id="core-assurances" class="docs-section-title">Core Cryptographic Assurances</h2>
+        <div class="docs-grid-2">
+          <article class="docs-card">
+            <span class="docs-card-icon">⚡</span>
+            <h3 class="docs-card-title">Zero Servers &amp; Relays</h3>
+            <p class="docs-card-text">
+              PeerBox operates strictly without application backends, cloud databases, or TURN relay
+              servers (<strong>ADR-0001</strong>). All signaling takes place over public,
+              decentralized Nostr relays with end-to-end encrypted negotiation envelopes. Relays
+              never see plaintext room contents or metadata.
+            </p>
+          </article>
+
+          <article class="docs-card">
+            <span class="docs-card-icon">🔒</span>
+            <h3 class="docs-card-title">Room Key Isolation</h3>
+            <p class="docs-card-text">
+              Room Keys reside exclusively in the client-side URL hash fragment
+              (<code>#key=...</code>,
+              <strong>ADR-0003</strong>). Per RFC 3986, web browsers mathematically never send URL
+              hash fragments to HTTP hosting servers or DNS providers. Encryption keys are derived
+              locally via Web Crypto AES-GCM (256-bit).
+            </p>
+          </article>
+
+          <article class="docs-card">
+            <span class="docs-card-icon">🧹</span>
+            <h3 class="docs-card-title">Ephemeral Memory</h3>
+            <p class="docs-card-text">
+              Messages and binary file chunks exist exclusively in browser RAM and evaporate the
+              instant a tab is closed or a peer leaves. Zero tracking cookies, zero analytics
+              pixels, zero telemetry beacons, and zero accounts. Local IndexedDB persistence is
+              strictly opt-in and never leaves your machine.
+            </p>
+          </article>
+
+          <article class="docs-card">
+            <span class="docs-card-icon">👁️</span>
+            <h3 class="docs-card-title">Direct P2P &amp; Transparent IP Disclosure</h3>
+            <p class="docs-card-text">
+              In accordance with <strong>ADR-0004</strong>, establishing direct WebRTC DataChannels
+              between two computers across the internet inherently reveals each peer's public IP
+              address to participating peers in that room. We transparently disclose this technical
+              reality: if you require IP masking, use a reputable VPN.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Transparent Data Practices Table -->
+      <section class="docs-section" aria-labelledby="data-practices">
+        <h2 id="data-practices" class="docs-section-title">Transparent Architecture Breakdown</h2>
+        <p class="docs-section-desc">
+          Compare what PeerBox does (and does not) touch compared to conventional cloud transfer
+          apps.
+        </p>
+        <div class="docs-table-wrapper">
+          <table class="docs-table">
+            <thead>
+              <tr>
+                <th>Data Dimension</th>
+                <th>Standard Cloud Platforms</th>
+                <th>PeerBox Architecture</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>User Identity</strong></td>
+                <td>Emails, phone numbers, OAuth cookies</td>
+                <td><span class="highlight-good">None (Ephemeral random Persona)</span></td>
+              </tr>
+              <tr>
+                <td><strong>File &amp; Message Storage</strong></td>
+                <td>Stored on remote AWS/GCP buckets</td>
+                <td><span class="highlight-good">0 Bytes (Direct browser memory / OPFS)</span></td>
+              </tr>
+              <tr>
+                <td><strong>Encryption Keys</strong></td>
+                <td>Held or escrowed by cloud server</td>
+                <td>
+                  <span class="highlight-good">Local Web Crypto AES-GCM (client-side only)</span>
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Traffic Logs</strong></td>
+                <td>Access logs, IP logs, audit trails</td>
+                <td>
+                  <span class="highlight-good">Zero server logs (Static GitHub Pages shell)</span>
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Intermediate Relay Bandwidth</strong></td>
+                <td>Routed through third-party TURN servers</td>
+                <td><span class="highlight-good">Zero-TURN (Direct peer-to-peer only)</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Open Source Verification -->
+      <section class="docs-section" aria-labelledby="verification">
+        <h2 id="verification" class="docs-section-title">Verifiable &amp; Open Source</h2>
+        <div class="trust-banner">
+          <span class="trust-banner-icon">🛡️</span>
+          <div class="trust-banner-content">
+            <h4>Every line of code is auditable</h4>
+            <p>
+              The complete PeerBox codebase, build pipelines, and automated test suites are publicly
+              available under the MIT license on
+              <a
+                href="https://github.com/ii2d/peer-box"
+                target="_blank"
+                rel="noreferrer"
+                class="docs-footer-link"
+              >
+                GitHub (ii2d/peer-box) </a
+              >. You can inspect the network tab, verify Web Crypto derivation, or host your own
+              instance on any static file server.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="docs-footer">
+      <div class="docs-footer-inner">
+        <div class="docs-footer-links">
+          <a href="/" class="docs-footer-link">Home (Create Room)</a>
+          <a href="/about/" class="docs-footer-link">About & Architecture</a>
+          <a href="/faq/" class="docs-footer-link">FAQ</a>
+          <a href="/privacy/" class="docs-footer-link">Privacy & Trust</a>
+          <a href="/llms.txt" class="docs-footer-link">Agent Brief (llms.txt)</a>
+          <a
+            href="https://github.com/ii2d/peer-box"
+            target="_blank"
+            rel="noreferrer"
+            class="docs-footer-link"
+          >
+            GitHub
+          </a>
+        </div>
+        <p>PeerBox &bull; Open-source serverless P2P communication</p>
+      </div>
+    </footer>
+  </body>
+</html>

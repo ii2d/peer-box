@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Frequently asked questions about PeerBox: privacy, file transfer limits, zero-server architecture, and WebRTC encryption."
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="canonical" href="https://peer-box.ii2d.com/faq/" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <title>Frequently Asked Questions - PeerBox</title>
+    <link rel="stylesheet" href="/src/docs.css" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://peer-box.ii2d.com/faq/" />
+    <meta property="og:title" content="Frequently Asked Questions - PeerBox" />
+    <meta
+      property="og:description"
+      content="Answers to common questions about PeerBox serverless WebRTC file sharing, privacy guarantees, and encryption."
+    />
+
+    <!-- Multi-Entity Structured Data for AI & Search Engines -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Are files or messages uploaded to a central server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. PeerBox is 100% serverless. All data streams directly browser-to-browser via WebRTC DataChannels with zero server storage, logging, or relaying."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What is the maximum file transfer size in PeerBox?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "There is no hard-coded file size limit. Files 25MB and larger stream directly into the browser Origin Private File System (OPFS), supporting multi-gigabyte transfers without browser memory crashes."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does PeerBox require accounts, phone numbers, or emails?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. PeerBox requires zero authentication, accounts, or persistent identifiers. When entering a room, a temporary randomized Persona (friendly animal name and pastel avatar) is generated client-side."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can a room host or network eavesdropper intercept the Room Key?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. The Room Key resides strictly in the URL hash fragment (#key=...). RFC 3986 guarantees that browsers never send URL hash fragments to HTTP servers or signaling relays."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I share a room with a mobile user?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Inside any active room, tap the Share button in the header. PeerBox renders a high-contrast SVG QR code that any smartphone camera can scan to instantly join with or without the encrypted key included."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What happens if a symmetric NAT firewall blocks direct connection?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "PeerBox operates strictly with zero TURN relay servers (respecting ADR-0001). If two peers are both behind strict symmetric firewalls that prevent STUN hole punching, PeerBox displays a diagnostic banner recommending that peers share a local LAN or use a VPN."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="docs-body">
+    <header class="docs-header">
+      <div class="docs-header-inner">
+        <a href="/" class="docs-brand">
+          <span class="docs-brand-icon">📦</span>
+          <span>PeerBox</span>
+        </a>
+        <nav class="docs-nav-links" aria-label="Documentation Navigation">
+          <a href="/about/" class="docs-nav-link">About</a>
+          <a href="/faq/" class="docs-nav-link active">FAQ</a>
+          <a href="/privacy/" class="docs-nav-link">Privacy & Trust</a>
+          <a
+            href="https://github.com/ii2d/peer-box"
+            target="_blank"
+            rel="noreferrer"
+            class="docs-nav-link"
+          >
+            GitHub
+          </a>
+        </nav>
+        <a href="/" class="docs-cta-btn">Launch App →</a>
+      </div>
+    </header>
+
+    <main class="docs-main">
+      <header class="docs-hero">
+        <div class="docs-badge">Questions &amp; Answers</div>
+        <h1 class="docs-title">Frequently Asked Questions</h1>
+        <p class="docs-subtitle">
+          Everything you need to know about PeerBox architecture, privacy, file transfers, and
+          limits.
+        </p>
+      </header>
+
+      <section class="docs-section" aria-labelledby="faq-list-heading">
+        <h2 id="faq-list-heading" class="docs-section-title">Common Questions</h2>
+        <div class="docs-faq-list">
+          <details class="docs-faq-item" open>
+            <summary>Are files or messages ever uploaded to a central server?</summary>
+            <p>
+              No. PeerBox is 100% serverless. The application code is served as static HTML/JS from
+              GitHub Pages. All messages, voice recordings, and binary file chunks stream directly
+              between peers via encrypted WebRTC DataChannels.
+            </p>
+          </details>
+
+          <details class="docs-faq-item">
+            <summary>What is the maximum file size that can be transferred?</summary>
+            <p>
+              There is no hard-coded file size limit. Files 25MB and larger stream directly into
+              your browser's Origin Private File System (OPFS), supporting multi-gigabyte transfers
+              without exhausting JavaScript heap memory.
+            </p>
+          </details>
+
+          <details class="docs-faq-item">
+            <summary>Does PeerBox require an account, phone number, or email?</summary>
+            <p>
+              No. PeerBox requires zero authentication, accounts, or persistent identifiers. When
+              joining a room, a temporary randomized Persona (friendly animal name and pastel
+              avatar) is generated client-side.
+            </p>
+          </details>
+
+          <details class="docs-faq-item">
+            <summary>Can a room host or network eavesdropper intercept my Room Key?</summary>
+            <p>
+              No. The Room Key resides strictly in the URL hash fragment (<code>#key=...</code>).
+              RFC 3986 guarantees that browsers never send URL hash fragments to HTTP servers or
+              signaling relays. Encryption keys are derived client-side using Web Crypto AES-GCM.
+            </p>
+          </details>
+
+          <details class="docs-faq-item">
+            <summary>How do I share a room with a mobile user?</summary>
+            <p>
+              Inside any active room, tap the <strong>Share</strong> button in the header. PeerBox
+              renders a high-contrast SVG QR code that any smartphone camera can scan to instantly
+              join with or without the encrypted key included.
+            </p>
+          </details>
+
+          <details class="docs-faq-item">
+            <summary>What happens if a symmetric NAT firewall blocks direct connection?</summary>
+            <p>
+              PeerBox operates strictly with zero TURN relay servers (respecting
+              <strong>ADR-0001</strong>). If two peers are both behind double-symmetric enterprise
+              firewalls that prevent STUN hole punching, PeerBox displays a diagnostic banner
+              recommending that peers share a local LAN or use a VPN.
+            </p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="docs-footer">
+      <div class="docs-footer-inner">
+        <div class="docs-footer-links">
+          <a href="/" class="docs-footer-link">Home (Create Room)</a>
+          <a href="/about/" class="docs-footer-link">About & Architecture</a>
+          <a href="/faq/" class="docs-footer-link">FAQ</a>
+          <a href="/privacy/" class="docs-footer-link">Privacy & Trust</a>
+          <a href="/llms.txt" class="docs-footer-link">Agent Brief (llms.txt)</a>
+          <a
+            href="https://github.com/ii2d/peer-box"
+            target="_blank"
+            rel="noreferrer"
+            class="docs-footer-link"
+          >
+            GitHub
+          </a>
+        </div>
+        <p>PeerBox &bull; Open-source serverless P2P communication</p>
+      </div>
+    </footer>
+  </body>
+</html>

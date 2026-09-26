@@ -29,7 +29,7 @@ describe('PortalView Component', () => {
     target.remove();
   });
 
-  it('renders below-the-fold semantic sections: features, architecture, comparison table, and FAQ', () => {
+  it('renders top navigation bar with links to About, FAQ, and GitHub', () => {
     const target = document.createElement('div');
     document.body.appendChild(target);
 
@@ -38,10 +38,22 @@ describe('PortalView Component', () => {
       props: {},
     });
 
-    expect(target.querySelector('.features-section')).not.toBeNull();
-    expect(target.querySelector('.architecture-section')).not.toBeNull();
-    expect(target.querySelector('.comparison-table')).not.toBeNull();
-    expect(target.querySelectorAll('.faq-item').length).toBeGreaterThanOrEqual(4);
+    const aboutLink = target.querySelector<HTMLAnchorElement>('a[href="/about/"]');
+    const faqLink = target.querySelector<HTMLAnchorElement>('a[href="/faq/"]');
+    const githubLink = target.querySelector<HTMLAnchorElement>('a[href*="github.com"]');
+
+    expect(aboutLink).not.toBeNull();
+    expect(faqLink).not.toBeNull();
+    expect(githubLink).not.toBeNull();
+
+    // Verify below-the-fold sections have been relocated to dedicated subpages
+    expect(target.querySelector('.features-section')).toBeNull();
+    expect(target.querySelector('.architecture-section')).toBeNull();
+    expect(target.querySelector('.comparison-table')).toBeNull();
+    expect(target.querySelector('.faq-item')).toBeNull();
+
+    // Verify footer links
+    expect(target.querySelector('a[href="/privacy/"]')).not.toBeNull();
     expect(target.querySelector('a[href="/llms.txt"]')).not.toBeNull();
 
     unmount(component);

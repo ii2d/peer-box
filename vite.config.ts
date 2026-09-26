@@ -17,4 +17,14 @@ export default defineConfig({
     include: ['{src,scripts}/**/*.{test,spec}.{js,ts}'],
     globals: true,
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(import.meta.dirname, 'index.html'),
+        about: path.resolve(import.meta.dirname, 'about/index.html'),
+        faq: path.resolve(import.meta.dirname, 'faq/index.html'),
+        privacy: path.resolve(import.meta.dirname, 'privacy/index.html'),
+      },
+    },
+  },
 });

@@ -9,6 +9,9 @@ export const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow';
 
 export const INDEXNOW_URLS = [
   'https://peer-box.ii2d.com/',
+  'https://peer-box.ii2d.com/about/',
+  'https://peer-box.ii2d.com/faq/',
+  'https://peer-box.ii2d.com/privacy/',
   'https://peer-box.ii2d.com/llms.txt',
   'https://peer-box.ii2d.com/llms-full.txt',
 ];

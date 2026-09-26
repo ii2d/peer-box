@@ -76,4 +76,22 @@ describe('TrustGuaranteeModal', () => {
     unmount(component);
     target.remove();
   });
+
+  it('renders link to /privacy/ opening in a new tab', () => {
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const component = mount(TrustGuaranteeModal, {
+      target,
+      props: { onClose: vi.fn() },
+    });
+
+    const link = target.querySelector<HTMLAnchorElement>('[data-testid="privacy-page-link"]');
+    expect(link).toBeTruthy();
+    expect(link?.getAttribute('href')).toBe('/privacy/');
+    expect(link?.getAttribute('target')).toBe('_blank');
+
+    unmount(component);
+    target.remove();
+  });
 });

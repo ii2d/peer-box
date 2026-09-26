@@ -31,5 +31,8 @@ PeerBox operates directly in the browser via WebRTC data channels and Nostr/BitT
 ## Full Technical Documentation
 
 For in-depth protocol flowcharts, WebRTC connection state diagrams, cryptographic derivation details, and complete FAQ, see:
+- [About & Architecture Specifications](https://peer-box.ii2d.com/about/)
+- [Frequently Asked Questions](https://peer-box.ii2d.com/faq/)
+- [Privacy & Trust Guarantee](https://peer-box.ii2d.com/privacy/)
 - [Full Technical Agent Brief](https://peer-box.ii2d.com/llms-full.txt)
 - [Source Code Repository](https://github.com/ii2d/peer-box)

@@ -122,10 +122,44 @@
         {/each}
       </div>
     </div>
+
+    <div class="modal-footer">
+      <a
+        href="/privacy/"
+        target="_blank"
+        rel="noreferrer"
+        class="trust-modal-doc-link"
+        data-testid="privacy-page-link"
+      >
+        Read full privacy &amp; trust architecture &rarr;
+      </a>
+    </div>
   </div>
 </div>
 
 <style>
+  .modal-footer {
+    padding: 12px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(15, 23, 42, 0.5);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
+
+  .trust-modal-doc-link {
+    color: #818cf8;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  .trust-modal-doc-link:hover {
+    color: #a5b4fc;
+    text-decoration: underline;
+  }
+
   .modal-backdrop {
     position: fixed;
     top: 0;
