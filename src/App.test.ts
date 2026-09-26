@@ -837,4 +837,59 @@ describe('PeerBox App Component', () => {
     unmount(component);
     target.remove();
   });
+
+  it('toggles mobile off-canvas Roster drawer and dismisses on backdrop tap or peer selection', async () => {
+    window.history.replaceState({}, '', '/mobile-room');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('user-local');
+    const transport2 = new InMemoryTransport('peer-remote');
+
+    const component = mount(App, { target, props: { transport: transport1 } });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    await transport2.joinRoom({ roomId: 'mobile-room' });
+    flushSync();
+
+    const roster = target.querySelector('[data-testid="roster-panel"]');
+    expect(roster?.classList.contains('mobile-open')).toBe(false);
+    expect(target.querySelector('[data-testid="roster-backdrop"]')).toBeNull();
+
+    // Open mobile drawer via header toggle button
+    const toggleBtn = target.querySelector<HTMLButtonElement>('[data-testid="roster-toggle-btn"]');
+    expect(toggleBtn).not.toBeNull();
+    toggleBtn?.click();
+    flushSync();
+
+    expect(roster?.classList.contains('mobile-open')).toBe(true);
+    const backdrop = target.querySelector<HTMLButtonElement>('[data-testid="roster-backdrop"]');
+    expect(backdrop).not.toBeNull();
+
+    // Dismiss drawer by tapping backdrop
+    backdrop?.click();
+    flushSync();
+
+    expect(roster?.classList.contains('mobile-open')).toBe(false);
+    expect(target.querySelector('[data-testid="roster-backdrop"]')).toBeNull();
+
+    // Reopen drawer and select a peer to verify auto-dismiss
+    toggleBtn?.click();
+    flushSync();
+    expect(roster?.classList.contains('mobile-open')).toBe(true);
+
+    const peerItem = target.querySelector<HTMLElement>('[data-testid="peer-item"]');
+    const peerBtn = peerItem?.querySelector<HTMLButtonElement>('button') || peerItem;
+    peerBtn?.click();
+    flushSync();
+
+    expect(roster?.classList.contains('mobile-open')).toBe(false);
+    expect(target.querySelector('[data-testid="roster-backdrop"]')).toBeNull();
+    expect(target.querySelector<HTMLSelectElement>('[data-testid="recipient-select"]')?.value).toBe(
+      'peer-remote',
+    );
+
+    unmount(component);
+    target.remove();
+  });
 });
