@@ -261,27 +261,63 @@ export class TrysteroTransport implements RoomTransport {
         const stats = await pc.getStats();
         let rtt = 20;
         let type: 'host' | 'srflx' = 'srflx';
+        let localCandType = 'srflx';
+        let remoteCandType = 'srflx';
+        let protocol = 'udp';
+        let packetsLost = 0;
+        let bytesSent = 0;
+        let bytesReceived = 0;
+
         stats.forEach((report: RTCStats) => {
           const rep = report as unknown as {
             type: string;
             state?: string;
             currentRoundTripTime?: number;
             candidateType?: string;
+            protocol?: string;
+            packetsLost?: number;
+            bytesSent?: number;
+            bytesReceived?: number;
           };
           if (rep.type === 'candidate-pair' && rep.state === 'succeeded') {
-            if (rep.currentRoundTripTime) {
+            if (rep.currentRoundTripTime !== undefined) {
               rtt = Math.round(rep.currentRoundTripTime * 1000);
             }
+            if (rep.bytesSent !== undefined) bytesSent = rep.bytesSent;
+            if (rep.bytesReceived !== undefined) bytesReceived = rep.bytesReceived;
           }
-          if (rep.type === 'remote-candidate' && rep.candidateType === 'host') {
-            type = 'host';
+          if (rep.type === 'local-candidate') {
+            if (rep.candidateType) localCandType = rep.candidateType;
+            if (rep.protocol) protocol = rep.protocol;
+          }
+          if (rep.type === 'remote-candidate') {
+            if (rep.candidateType) {
+              remoteCandType = rep.candidateType;
+              if (rep.candidateType === 'host') {
+                type = 'host';
+              }
+            }
+          }
+          if (rep.type === 'inbound-rtp' && rep.packetsLost !== undefined) {
+            packetsLost += rep.packetsLost;
           }
         });
+
+        const state = (pc.connectionState ||
+          pc.iceConnectionState ||
+          'connected') as PeerConnectionStats['connectionState'];
+
         return {
           peerId,
           roundTripTimeMs: rtt,
           candidateType: type,
-          connectionState: 'connected',
+          localCandidateType: localCandType,
+          remoteCandidateType: remoteCandType,
+          protocol,
+          packetsLost,
+          bytesSent,
+          bytesReceived,
+          connectionState: state === 'failed' || state === 'disconnected' ? 'failed' : 'connected',
         };
       }
     } catch {

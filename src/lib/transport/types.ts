@@ -15,6 +15,12 @@ export interface PeerConnectionStats {
   roundTripTimeMs: number;
   candidateType: 'host' | 'srflx';
   connectionState: 'connected' | 'connecting' | 'disconnected' | 'failed';
+  localCandidateType?: string;
+  remoteCandidateType?: string;
+  protocol?: string;
+  packetsLost?: number;
+  bytesReceived?: number;
+  bytesSent?: number;
 }
 
 export interface RoomTransport {

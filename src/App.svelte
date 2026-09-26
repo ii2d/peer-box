@@ -19,6 +19,9 @@
   import VoiceNoteRecorder from './lib/voice/VoiceNoteRecorder.svelte';
   import { captureScreenGrab } from './lib/screengrab/screengrab';
   import ScreenGrabPreviewTray from './lib/screengrab/ScreenGrabPreviewTray.svelte';
+  import ConnectionBadge from './lib/diagnostics/ConnectionBadge.svelte';
+  import DiagnosticsDrawer from './lib/diagnostics/DiagnosticsDrawer.svelte';
+  import type { PeerConnectionStats } from './lib/transport/types';
 
   interface Props {
     transport?: RoomTransport;
@@ -41,6 +44,21 @@
   let connectedPeers = $state<PeerInfo[]>([]);
   let isAloneDiagnosticVisible = $state(false);
   let aloneTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // WebRTC Diagnostics State
+  let peerStats = $state<Record<string, PeerConnectionStats>>({});
+  let selectedDiagnosticsPeerId = $state<string | null>(null);
+  let statsPollInterval: ReturnType<typeof setInterval> | null = null;
+
+  let selectedDiagnosticsPeer = $derived(
+    selectedDiagnosticsPeerId
+      ? connectedPeers.find((p) => p.id === selectedDiagnosticsPeerId) || null
+      : null,
+  );
+
+  let hasFailedConnection = $derived(
+    Object.values(peerStats).some((s) => s.connectionState === 'failed'),
+  );
 
   // Change Key Modal
   let isChangingKey = $state(false);
@@ -99,12 +117,19 @@
           connectedPeers = [...connectedPeers, peer];
         }
         resetAloneTimer();
+        void updatePeerStats();
       }),
     );
 
     unsubs.push(
       transport.onPeerLeave((peerId) => {
         connectedPeers = connectedPeers.filter((p) => p.id !== peerId);
+        const copy = { ...peerStats };
+        delete copy[peerId];
+        peerStats = copy;
+        if (selectedDiagnosticsPeerId === peerId) {
+          selectedDiagnosticsPeerId = null;
+        }
         if (selectedRecipientId === peerId) {
           selectedRecipientId = 'everyone';
         }
@@ -148,6 +173,7 @@
   onDestroy(() => {
     for (const u of unsubs) u();
     if (aloneTimer) clearTimeout(aloneTimer);
+    stopStatsPolling();
     if (chatService) chatService.destroy();
     if (transferService) transferService.destroy();
   });
@@ -168,6 +194,38 @@
       aloneTimer = null;
     }
     isAloneDiagnosticVisible = false;
+  }
+
+  async function updatePeerStats() {
+    if (!transport?.getPeerStats || connectedPeers.length === 0) return;
+    for (const peer of connectedPeers) {
+      try {
+        const stats = await transport.getPeerStats(peer.id);
+        if (stats) {
+          peerStats = { ...peerStats, [peer.id]: stats };
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  function startStatsPolling() {
+    stopStatsPolling();
+    void updatePeerStats();
+    statsPollInterval = setInterval(updatePeerStats, 2500);
+  }
+
+  function stopStatsPolling() {
+    if (statsPollInterval) {
+      clearInterval(statsPollInterval);
+      statsPollInterval = null;
+    }
+  }
+
+  function openDiagnostics(peerId: string) {
+    selectedDiagnosticsPeerId = peerId;
+    void updatePeerStats();
   }
 
   function handleRandomName() {
@@ -241,6 +299,8 @@
         resetAloneTimer();
       }
 
+      startStatsPolling();
+
       if (updateHistory && typeof window !== 'undefined') {
         const newUrl = buildRoomUrl(roomId, { roomKey, includeKey: !!roomKey });
         window.history.pushState({ roomId, roomKey }, '', newUrl);
@@ -251,6 +311,10 @@
   }
 
   function leave(updateHistory = true) {
+    stopStatsPolling();
+    peerStats = {};
+    selectedDiagnosticsPeerId = null;
+
     if (chatService) {
       chatService.destroy();
       chatService = null;
@@ -773,10 +837,30 @@
             <div class="peer-pill" data-testid="peer-item">
               <span class="peer-dot" style:background-color={peer.color || 'var(--primary)'}></span>
               <span class="peer-name">{peer.name || peer.id}</span>
+              <ConnectionBadge
+                stats={peerStats[peer.id]}
+                onClick={() => openDiagnostics(peer.id)}
+              />
             </div>
           {/each}
         </div>
       </div>
+
+      <!-- Symmetric NAT Direct Connection Failed Banner -->
+      {#if hasFailedConnection}
+        <div class="nat-diagnostic-banner" data-testid="nat-diagnostic-banner">
+          <div class="nat-diagnostic-content">
+            <span class="nat-icon">⚠️</span>
+            <div class="nat-text">
+              <strong>Direct Connection Failed (Symmetric NAT Firewall)</strong>
+              <p>
+                PeerBox operates with zero TURN relay servers (ADR-0001). A strict symmetric NAT or
+                firewall is preventing direct peer-to-peer data channels between these networks.
+              </p>
+            </div>
+          </div>
+        </div>
+      {/if}
 
       <!-- Chat & Transfer Timeline -->
       <div class="chat-timeline" bind:this={messagesContainer} data-testid="chat-timeline">
@@ -951,6 +1035,22 @@
           alt={activeLightbox.name}
           size={activeLightbox.size}
           onClose={closeLightbox}
+        />
+      {/if}
+
+      <!-- Connection & ICE Diagnostics Drawer -->
+      {#if selectedDiagnosticsPeer}
+        <DiagnosticsDrawer
+          peerName={selectedDiagnosticsPeer.name || selectedDiagnosticsPeer.id}
+          peerEmoji="👤"
+          peerColor={selectedDiagnosticsPeer.color || '#6366f1'}
+          stats={peerStats[selectedDiagnosticsPeer.id] || {
+            peerId: selectedDiagnosticsPeer.id,
+            roundTripTimeMs: 0,
+            candidateType: 'srflx',
+            connectionState: 'connecting',
+          }}
+          onClose={() => (selectedDiagnosticsPeerId = null)}
         />
       {/if}
     </div>
@@ -1291,6 +1391,41 @@
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 0.15rem;
+  }
+
+  .nat-diagnostic-banner {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    color: #fca5a5;
+    font-size: 0.8125rem;
+  }
+
+  .nat-diagnostic-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .nat-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .nat-text strong {
+    display: block;
+    color: #fca5a5;
+    font-size: 0.8125rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .nat-text p {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #f87171;
+    line-height: 1.4;
   }
 
   .presence-bar {

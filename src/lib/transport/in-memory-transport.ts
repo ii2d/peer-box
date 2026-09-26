@@ -57,11 +57,13 @@ export class InMemoryTransport implements RoomTransport {
     const keysMatch = (room.roomKey ?? null) === (this._roomKey ?? null);
 
     if (keysMatch) {
+      room.peers.add(this);
       // Notify existing matching peers in room of our arrival
       for (const peer of room.peers) {
-        peer._dispatchPeerJoin({ id: this.localPeerId });
+        if (peer !== this) {
+          peer._dispatchPeerJoin({ id: this.localPeerId });
+        }
       }
-      room.peers.add(this);
     }
   }
 
@@ -132,14 +134,27 @@ export class InMemoryTransport implements RoomTransport {
     };
   }
 
+  private customPeerStats = new Map<string, PeerConnectionStats>();
+
+  setMockPeerStats(peerId: string, stats: PeerConnectionStats): void {
+    this.customPeerStats.set(peerId, stats);
+  }
+
   async getPeerStats(peerId: string): Promise<PeerConnectionStats | null> {
+    if (this.customPeerStats.has(peerId)) {
+      return this.customPeerStats.get(peerId)!;
+    }
     if (!this.getPeers().some((p) => p.id === peerId)) {
       return null;
     }
     return {
       peerId,
-      roundTripTimeMs: 15,
+      roundTripTimeMs: 12,
       candidateType: 'host',
+      localCandidateType: 'host',
+      remoteCandidateType: 'host',
+      protocol: 'udp',
+      packetsLost: 0,
       connectionState: 'connected',
     };
   }

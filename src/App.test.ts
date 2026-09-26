@@ -608,4 +608,76 @@ describe('PeerBox App Component', () => {
     unmount(component);
     target.remove();
   });
+
+  it('displays latency badge beside connected peer and opens diagnostics drawer on click', async () => {
+    window.history.replaceState({}, '', '/diag-room');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('user-local');
+    const transport2 = new InMemoryTransport('peer-remote');
+
+    const component = mount(App, { target, props: { transport: transport1 } });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    // Remote peer joins
+    await transport2.joinRoom({ roomId: 'diag-room' });
+    await new Promise((r) => setTimeout(r, 20));
+    flushSync();
+
+    // Verify latency badge is present beside the remote peer
+    const badge = target.querySelector<HTMLButtonElement>('[data-testid="latency-badge"]');
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toContain('Direct LAN');
+
+    // Click latency badge to open diagnostics drawer
+    badge?.click();
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    expect(target.querySelector('[data-testid="diagnostics-drawer"]')).not.toBeNull();
+    expect(target.textContent).toContain('WebRTC Connection & ICE Diagnostics');
+    expect(target.textContent).toContain('Zero-TURN Architecture');
+
+    // Close drawer
+    target.querySelector<HTMLButtonElement>('[data-testid="close-diagnostics-btn"]')?.click();
+    flushSync();
+
+    expect(target.querySelector('[data-testid="diagnostics-drawer"]')).toBeNull();
+
+    unmount(component);
+    target.remove();
+  });
+
+  it('displays symmetric NAT diagnostic banner when peer connection fails', async () => {
+    window.history.replaceState({}, '', '/blocked-room');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('user-local');
+    const transport2 = new InMemoryTransport('peer-blocked');
+
+    // Set mock stats to failed state
+    transport1.setMockPeerStats('peer-blocked', {
+      peerId: 'peer-blocked',
+      roundTripTimeMs: 0,
+      candidateType: 'srflx',
+      connectionState: 'failed',
+    });
+
+    const component = mount(App, { target, props: { transport: transport1 } });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    await transport2.joinRoom({ roomId: 'blocked-room' });
+    await new Promise((r) => setTimeout(r, 20));
+    flushSync();
+
+    // Verify NAT diagnostic banner appears
+    const banner = target.querySelector('[data-testid="nat-diagnostic-banner"]');
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain('Symmetric NAT');
+
+    unmount(component);
+    target.remove();
+  });
 });
