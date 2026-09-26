@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 
-export const INDEXNOW_KEY = 'c3b4f6918d204a559e871dc962e24ab7';
+export const INDEXNOW_KEY =
+  process.env.INDEXNOW_KEY || 'c3b4f6918d204a559e871dc962e24ab7'; // gitleaks:allow
 export const INDEXNOW_HOST = 'peer-box.ii2d.com';
 export const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow';
 
