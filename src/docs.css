@@ -333,6 +333,24 @@
   text-decoration: underline;
 }
 
+.docs-version-tag {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--card-border);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.docs-version-tag:hover {
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.1);
+}
+
 @media (max-width: 640px) {
   .docs-title {
     font-size: 2rem;

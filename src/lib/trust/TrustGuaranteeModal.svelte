@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_VERSION, getVersionUrl } from '../version';
   interface Props {
     onClose: () => void;
   }
@@ -125,6 +126,16 @@
 
     <div class="modal-footer">
       <a
+        href={getVersionUrl(APP_VERSION)}
+        target="_blank"
+        rel="noreferrer"
+        class="trust-modal-version"
+        data-testid="trust-modal-version"
+        title="View verified commit/release"
+      >
+        Build {APP_VERSION}
+      </a>
+      <a
         href="/privacy/"
         target="_blank"
         rel="noreferrer"
@@ -143,8 +154,25 @@
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(15, 23, 42, 0.5);
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
+  }
+
+  .trust-modal-version {
+    font-size: 11px;
+    color: var(--text-muted, #94a3b8);
+    text-decoration: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    opacity: 0.8;
+    transition:
+      opacity 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .trust-modal-version:hover {
+    color: #a5b4fc;
+    opacity: 1;
+    text-decoration: underline;
   }
 
   .trust-modal-doc-link {

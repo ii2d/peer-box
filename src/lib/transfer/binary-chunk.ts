@@ -38,8 +38,7 @@ export function unpackChunk(packetOrPayload: unknown): {
     chunkIndex: number;
     data: string | Uint8Array;
   };
-  const data =
-    typeof legacy.data === 'string' ? base64ToUint8Array(legacy.data) : legacy.data;
+  const data = typeof legacy.data === 'string' ? base64ToUint8Array(legacy.data) : legacy.data;
   return {
     transferId: legacy.transferId,
     chunkIndex: legacy.chunkIndex,

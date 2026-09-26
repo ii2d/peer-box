@@ -65,6 +65,7 @@ describe('PortalView Component', () => {
     // Verify footer links
     expect(target.querySelector('footer a[href="/privacy/"]')).not.toBeNull();
     expect(target.querySelector('a[href="/llms.txt"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="portal-version-link"]')).not.toBeNull();
 
     unmount(component);
     target.remove();

@@ -2,9 +2,24 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
 import path from 'path';
+import { execSync } from 'child_process';
+
+function getAppVersion(): string {
+  try {
+    return execSync('git describe --tags --always --dirty', { encoding: 'utf8' }).trim();
+  } catch {
+    return process.env.VITE_APP_VERSION || 'v0.1.0';
+  }
+}
+
+const appVersion = getAppVersion();
+process.env.VITE_APP_VERSION = appVersion;
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [svelte()],
   resolve: {
     conditions: ['browser'],

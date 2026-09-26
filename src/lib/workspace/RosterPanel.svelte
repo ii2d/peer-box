@@ -4,6 +4,7 @@
   import type { Persona } from '../persona/persona';
   import { buildRoomUrl } from '../room/url';
   import type { PeerConnectionStats, PeerInfo } from '../transport/types';
+  import { APP_VERSION, getVersionUrl } from '../version';
 
   interface Props {
     roomId?: string | null;
@@ -201,6 +202,19 @@
     >
       🚪 Leave Room
     </button>
+
+    <div class="roster-version">
+      <a
+        href={getVersionUrl(APP_VERSION)}
+        target="_blank"
+        rel="noreferrer"
+        class="roster-version-link"
+        title="View source at this version"
+        data-testid="roster-version-link"
+      >
+        PeerBox {APP_VERSION}
+      </a>
+    </div>
   </div>
 </aside>
 
@@ -525,6 +539,25 @@
     width: 100%;
     text-align: center;
     justify-content: center;
+  }
+
+  .roster-version {
+    text-align: center;
+    padding-top: 0.25rem;
+  }
+
+  .roster-version-link {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.15s ease;
+    opacity: 0.7;
+  }
+
+  .roster-version-link:hover {
+    color: var(--accent-light);
+    opacity: 1;
+    text-decoration: underline;
   }
 
   .btn-secondary {

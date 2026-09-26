@@ -91,6 +91,12 @@ describe('TrustGuaranteeModal', () => {
     expect(link?.getAttribute('href')).toBe('/privacy/');
     expect(link?.getAttribute('target')).toBe('_blank');
 
+    const versionLink = target.querySelector<HTMLAnchorElement>(
+      '[data-testid="trust-modal-version"]',
+    );
+    expect(versionLink).toBeTruthy();
+    expect(versionLink?.textContent).toContain('Build');
+
     unmount(component);
     target.remove();
   });

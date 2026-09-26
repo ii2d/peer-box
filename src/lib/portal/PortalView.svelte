@@ -1,5 +1,6 @@
 <script lang="ts">
   import BrandIcon from '../ui/BrandIcon.svelte';
+  import { APP_VERSION, getVersionUrl } from '../version';
 
   interface Props {
     roomName?: string;
@@ -162,6 +163,17 @@
         class="footer-link"
       >
         GitHub
+      </a>
+      <span class="footer-sep">&bull;</span>
+      <a
+        href={getVersionUrl(APP_VERSION)}
+        target="_blank"
+        rel="noreferrer"
+        class="footer-link"
+        title="View source at this version"
+        data-testid="portal-version-link"
+      >
+        {APP_VERSION}
       </a>
     </div>
   </footer>
