@@ -1,20 +1,38 @@
+<script module lang="ts">
+  let instanceCount = 0;
+</script>
+
 <script lang="ts">
   interface Props {
     size?: number | string;
     class?: string;
+    label?: string;
+    'aria-hidden'?: boolean | 'true' | 'false';
   }
 
-  let { size = 24, class: className = '' }: Props = $props();
+  let { size = 24, class: className = '', label, 'aria-hidden': ariaHiddenProp }: Props = $props();
+
+  instanceCount += 1;
+  const id = instanceCount;
+  const topGradientId = `brandTop-${id}`;
+  const leftGradientId = `brandLeft-${id}`;
+  const rightGradientId = `brandRight-${id}`;
+  const glowGradientId = `brandGlow-${id}`;
 
   let dimension = $derived(typeof size === 'number' ? `${size}px` : size);
+  let isAriaHidden = $derived<boolean | 'true' | 'false' | undefined>(
+    ariaHiddenProp !== undefined ? ariaHiddenProp : label ? undefined : true,
+  );
+  let role = $derived(label ? 'img' : undefined);
 </script>
 
 <span
   class="brand-icon-wrapper {className}"
   style:width={dimension}
   style:height={dimension}
-  role="img"
-  aria-label="PeerBox Logo"
+  {role}
+  aria-label={label}
+  aria-hidden={isAriaHidden}
 >
   <svg
     viewBox="0 0 32 32"
@@ -24,34 +42,34 @@
     xmlns="http://www.w3.org/2000/svg"
   >
     <defs>
-      <linearGradient id="brandTop" x1="0%" y1="100%" x2="100%" y2="0%">
+      <linearGradient id={topGradientId} x1="0%" y1="100%" x2="100%" y2="0%">
         <stop offset="0%" stop-color="#06b6d4" />
         <stop offset="100%" stop-color="#818cf8" />
       </linearGradient>
 
-      <linearGradient id="brandLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id={leftGradientId} x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="#4f46e5" />
         <stop offset="100%" stop-color="#312e81" />
       </linearGradient>
 
-      <linearGradient id="brandRight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id={rightGradientId} x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="#38bdf8" />
         <stop offset="100%" stop-color="#0284c7" />
       </linearGradient>
 
-      <radialGradient id="brandGlow" cx="50%" cy="50%" r="50%">
+      <radialGradient id={glowGradientId} cx="50%" cy="50%" r="50%">
         <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.4" />
         <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
       </radialGradient>
     </defs>
 
     <!-- Subtle Ambient Glow -->
-    <circle cx="16" cy="16.5" r="14" fill="url(#brandGlow)" class="brand-ambient-glow" />
+    <circle cx="16" cy="16.5" r="14" fill={`url(#${glowGradientId})`} class="brand-ambient-glow" />
 
     <!-- Isometric Faces -->
-    <polygon points="5,10.5 16,16.5 16,28 5,22" fill="url(#brandLeft)" />
-    <polygon points="16,16.5 27,10.5 27,22 16,28" fill="url(#brandRight)" />
-    <polygon points="16,5 27,10.5 16,16.5 5,10.5" fill="url(#brandTop)" />
+    <polygon points="5,10.5 16,16.5 16,28 5,22" fill={`url(#${leftGradientId})`} />
+    <polygon points="16,16.5 27,10.5 27,22 16,28" fill={`url(#${rightGradientId})`} />
+    <polygon points="16,5 27,10.5 16,16.5 5,10.5" fill={`url(#${topGradientId})`} />
 
     <!-- Subtle Edge Accents -->
     <polyline
