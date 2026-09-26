@@ -22,6 +22,8 @@
   import ConnectionBadge from './lib/diagnostics/ConnectionBadge.svelte';
   import DiagnosticsDrawer from './lib/diagnostics/DiagnosticsDrawer.svelte';
   import type { PeerConnectionStats } from './lib/transport/types';
+  import TrustGuaranteeModal from './lib/trust/TrustGuaranteeModal.svelte';
+  import RoomShareModal from './lib/share/RoomShareModal.svelte';
 
   interface Props {
     transport?: RoomTransport;
@@ -59,6 +61,10 @@
   let hasFailedConnection = $derived(
     Object.values(peerStats).some((s) => s.connectionState === 'failed'),
   );
+
+  // Trust & Share Modals
+  let isTrustModalOpen = $state(false);
+  let isShareModalOpen = $state(false);
 
   // Change Key Modal
   let isChangingKey = $state(false);
@@ -314,6 +320,8 @@
     stopStatsPolling();
     peerStats = {};
     selectedDiagnosticsPeerId = null;
+    isTrustModalOpen = false;
+    isShareModalOpen = false;
 
     if (chatService) {
       chatService.destroy();
@@ -711,6 +719,26 @@
 
           <button
             type="button"
+            class="btn-secondary btn-trust"
+            data-testid="trust-guarantee-btn"
+            onclick={() => (isTrustModalOpen = true)}
+            title="View PeerBox Trust Guarantee & Privacy Assurances"
+          >
+            🛡️ Private & Ephemeral
+          </button>
+
+          <button
+            type="button"
+            class="btn-secondary btn-share"
+            data-testid="share-room-btn"
+            onclick={() => (isShareModalOpen = true)}
+            title="Share room link or QR code"
+          >
+            🔗 Share
+          </button>
+
+          <button
+            type="button"
             class="btn-secondary btn-icon-persist"
             data-testid="persist-toggle-btn"
             onclick={togglePersistence}
@@ -1051,6 +1079,20 @@
             connectionState: 'connecting',
           }}
           onClose={() => (selectedDiagnosticsPeerId = null)}
+        />
+      {/if}
+
+      <!-- Trust Guarantee Explainer Modal -->
+      {#if isTrustModalOpen}
+        <TrustGuaranteeModal onClose={() => (isTrustModalOpen = false)} />
+      {/if}
+
+      <!-- Room Share Modal -->
+      {#if isShareModalOpen && currentRoomId}
+        <RoomShareModal
+          roomId={currentRoomId}
+          roomKey={currentRoomKey}
+          onClose={() => (isShareModalOpen = false)}
         />
       {/if}
     </div>

@@ -680,4 +680,47 @@ describe('PeerBox App Component', () => {
     unmount(component);
     target.remove();
   });
+
+  it('opens trust guarantee modal and room share modal from header actions', async () => {
+    window.history.replaceState({}, '', '/shared-room#key=topsecret');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('user-local');
+
+    const component = mount(App, { target, props: { transport } });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    // Open Trust Guarantee modal
+    const trustBtn = target.querySelector<HTMLButtonElement>('[data-testid="trust-guarantee-btn"]');
+    expect(trustBtn).not.toBeNull();
+    trustBtn?.click();
+    flushSync();
+
+    expect(target.querySelector('[data-testid="trust-modal"]')).not.toBeNull();
+    expect(target.querySelectorAll('[data-testid^="trust-card-"]').length).toBe(4);
+
+    // Close Trust Guarantee modal
+    target.querySelector<HTMLButtonElement>('[data-testid="close-trust-modal-btn"]')?.click();
+    flushSync();
+    expect(target.querySelector('[data-testid="trust-modal"]')).toBeNull();
+
+    // Open Share Room modal
+    const shareBtn = target.querySelector<HTMLButtonElement>('[data-testid="share-room-btn"]');
+    expect(shareBtn).not.toBeNull();
+    shareBtn?.click();
+    flushSync();
+
+    expect(target.querySelector('[data-testid="share-modal"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="qr-code"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="copy-link-btn"]')).not.toBeNull();
+
+    // Close Share Room modal
+    target.querySelector<HTMLButtonElement>('[data-testid="close-share-modal-btn"]')?.click();
+    flushSync();
+    expect(target.querySelector('[data-testid="share-modal"]')).toBeNull();
+
+    unmount(component);
+    target.remove();
+  });
 });
