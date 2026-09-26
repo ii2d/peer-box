@@ -626,11 +626,9 @@ describe('PeerBox App Component', () => {
     // Click send
     const sendBtn = target.querySelector<HTMLButtonElement>('[data-testid="screengrab-send-btn"]');
     sendBtn?.click();
-    await new Promise((r) => setTimeout(r, 20));
-    flushSync();
-
-    // Tray closes
-    expect(target.querySelector('[data-testid="screengrab-tray"]')).toBeNull();
+    await vi.waitFor(() => {
+      expect(target.querySelector('[data-testid="screengrab-tray"]')).toBeNull();
+    });
 
     // Verify caption message rendered in timeline
     expect(target.textContent).toContain('Check out this screen frame');

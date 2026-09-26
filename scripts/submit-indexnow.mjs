@@ -3,8 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 
-export const INDEXNOW_KEY =
-  process.env.INDEXNOW_KEY || 'c3b4f6918d204a559e871dc962e24ab7'; // gitleaks:allow
+export const INDEXNOW_KEY = process.env.INDEXNOW_KEY || '';
 export const INDEXNOW_HOST = 'peer-box.ii2d.com';
 export const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow';
 
@@ -20,12 +19,17 @@ export const INDEXNOW_URLS = [
 /**
  * Submits URL changes to the IndexNow protocol endpoint.
  */
-export async function submitIndexNow(fetchFn = globalThis.fetch) {
-  const keyLocation = `https://${INDEXNOW_HOST}/${INDEXNOW_KEY}.txt`;
+export async function submitIndexNow(fetchFn = globalThis.fetch, key = INDEXNOW_KEY) {
+  if (!key) {
+    console.log('[IndexNow] No INDEXNOW_KEY provided. Skipping IndexNow announcement.');
+    return { success: true, skipped: true };
+  }
+
+  const keyLocation = `https://${INDEXNOW_HOST}/${key}.txt`;
 
   const payload = {
     host: INDEXNOW_HOST,
-    key: INDEXNOW_KEY,
+    key,
     keyLocation,
     urlList: INDEXNOW_URLS,
   };
@@ -59,6 +63,11 @@ export async function submitIndexNow(fetchFn = globalThis.fetch) {
 // Auto-run if executed directly via node
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
 if (isMain) {
+  if (!INDEXNOW_KEY) {
+    console.log('[IndexNow] No INDEXNOW_KEY provided. Skipping IndexNow announcement.');
+    process.exit(0);
+  }
+
   submitIndexNow().then((result) => {
     if (!result.success) {
       // Do not fail CI if IndexNow API is temporarily offline
