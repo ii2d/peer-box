@@ -1,107 +1,55 @@
-# PeerBox
+<div align="center">
+  <img src="public/icon.svg" width="96" height="96" alt="PeerBox Logo" />
+  <h1>PeerBox</h1>
+  <p><strong>Serverless, zero-login peer-to-peer workspace for real-time messaging and chunked file sharing via WebRTC & Nostr.</strong></p>
 
-![PeerBox Logo](public/icon.svg)
+  <p>
+    <a href="https://peer-box.ii2d.com"><strong>peer-box.ii2d.com »</strong></a>
+  </p>
 
-**Serverless, zero-login peer-to-peer workspace for real-time room communication and chunked multi-peer file streaming via WebRTC & Nostr.**
-
-[![Live App](https://img.shields.io/badge/Live%20App-peer--box.ii2d.com-38bdf8?style=flat-square&logo=cloudflare&logoColor=white)](https://peer-box.ii2d.com)
-[![Deploy & Security CI](https://img.shields.io/github/actions/workflow/status/ii2d/peer-box/deploy.yml?branch=main&label=deploy%20%26%20security&style=flat-square)](https://github.com/ii2d/peer-box/actions/workflows/deploy.yml)
-[![CodeQL](https://img.shields.io/github/actions/workflow/status/ii2d/peer-box/codeql.yml?branch=main&label=codeql&style=flat-square)](https://github.com/ii2d/peer-box/actions/workflows/codeql.yml)
-![Svelte 5](https://img.shields.io/badge/Svelte-5.x%20Runes-ff3e00?style=flat-square&logo=svelte&logoColor=white)
-![WebRTC + Nostr](https://img.shields.io/badge/Protocol-WebRTC%20%2B%20Nostr-6366f1?style=flat-square)
-
----
-
-## Overview
-
-**PeerBox** is an open-source, serverless web application designed for private, browser-to-browser collaboration. There are no user accounts, no central application servers, no databases, and no intermediaries inspecting or storing your content.
-
-Peers discover each other in a virtual **Room** using ephemeral **Nostr** signaling (with BitTorrent tracker fallback via [Trystero](https://github.com/oxilor/trystero)) and establish direct **WebRTC DataChannels** for end-to-end encrypted messaging, voice memos, screen captures, and high-performance file transfers.
-
----
-
-## Core Trust Guarantees
-
-PeerBox is built on four verifiable architectural assurances:
-
-1. **Zero Servers & Intermediaries**: All communication and file transmission occurs directly between peer browsers via WebRTC. No central server relays, buffers, or stores your messages or files.
-2. **Room Key Encryption**: Discovery and room traffic are secured using keys derived from a shared secret **Room Key**. The Room Key resides strictly in the URL hash fragment (`#key=...`), which web browsers never transmit to hosting servers.
-3. **Ephemeral In-Memory State**: No central database or cloud storage. Chat history, active peer presence, and transfers exist purely in volatile browser memory and are discarded immediately upon closing or refreshing the tab.
-4. **Direct P2P & Transparent IP Disclosure**: PeerBox operates exclusively peer-to-peer without central TURN relays ([ADR-0001](docs/adr/0001-zero-turn-relay-architecture.md)). Direct WebRTC connections inherently exchange IP addresses between connected peers, ensuring no third party can intercept or decrypt your data ([ADR-0004](docs/adr/0004-transparent-webrtc-ip-disclosure.md)).
+  <p>
+    <a href="https://peer-box.ii2d.com"><img src="https://img.shields.io/badge/Demo-peer--box.ii2d.com-38bdf8?style=flat-square&logo=cloudflare&logoColor=white" alt="Live Demo" /></a>
+    <a href="https://github.com/ii2d/peer-box/actions/workflows/deploy.yml"><img src="https://img.shields.io/github/actions/workflow/status/ii2d/peer-box/deploy.yml?branch=main&label=CI&style=flat-square" alt="CI Status" /></a>
+    <a href="https://github.com/ii2d/peer-box/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/ii2d/peer-box/codeql.yml?branch=main&label=CodeQL&style=flat-square" alt="CodeQL" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT" /></a>
+    <a href="https://svelte.dev"><img src="https://img.shields.io/badge/Svelte-5.x%20Runes-ff3e00?style=flat-square&logo=svelte&logoColor=white" alt="Svelte 5" /></a>
+    <a href="https://webrtc.org"><img src="https://img.shields.io/badge/WebRTC-P2P-333333?style=flat-square" alt="WebRTC" /></a>
+  </p>
+</div>
 
 ---
 
-## Features
+## ⚡ Highlights
 
-- **⚡ Direct P2P Messaging**: Low-latency text messaging with optional 1-to-1 **Recipient Targeting** or broadcast to the entire room.
-- **📦 Chunked OPFS File Transfers**: Direct browser-to-browser streaming for files of any size (including large files ≥ 25MB) written directly to disk via the **Origin Private File System (OPFS)** without memory exhaustion.
-- **🎙️ Ephemeral Voice Notes**: Record and preview audio memos directly in-browser using Opus encoding with interactive waveform playback.
-- **📸 Instant Screen Grabs**: Capture and send a single display or window frame without heavy ongoing video call overhead.
-- **📊 Real-Time WebRTC Telemetry**: Live measurement of peer connection type (`⚡ Direct LAN` vs `🌐 Direct P2P`), round-trip latency (ping), transfer throughput, and transfer ETA.
-- **📱 Responsive Workspace Layout**: Edge-to-edge desktop experience with a 2-column **Roster** and **Timeline**, and a mobile shell featuring safe-area insets and an off-canvas drawer ([ADR-0005](docs/adr/0005-full-window-workspace-and-seo-portal.md)).
-- **🔗 Instant Room Sharing**: 1-click room link copying and built-in offline QR code generation for rapid mobile device pairing.
-- **🌐 Offline-Ready PWA**: Fully functional offline application shell powered by a lightweight Service Worker.
+PeerBox enables private, instant, browser-to-browser collaboration with **no accounts, no backend servers, and no tracking**:
+
+- **🔒 Zero Servers & Intermediaries**: Direct browser-to-browser WebRTC DataChannels. No central server inspects, relays, or stores messages.
+- **🔑 URL Hash Encryption**: The secret Room Key resides exclusively in the URL hash fragment (`#key=...`), which web browsers never transmit over HTTP.
+- **📦 Large File Streaming (OPFS)**: Slices and streams files of any size directly to disk using the Origin Private File System (OPFS), bypassing browser memory limits.
+- **🧹 Ephemeral State**: All active state lives in volatile browser memory—closing the tab erases everything.
 
 ---
 
-## Architecture & Mechanics
+## ✨ Features
 
-```mermaid
-flowchart TD
-  subgraph Discovery["1. Ephemeral Signaling"]
-    A[Peer A] <-->|"Room ID + Salted Hash"| N["Nostr Relays / WSS"]
-    B[Peer B] <-->|"Room ID + Salted Hash"| N
-  end
-
-  subgraph Handshake["2. WebRTC Handshake & Key Derivation"]
-    A -.->|"Key in Hash: #key=..."| A
-    B -.->|"Key in Hash: #key=..."| B
-    A <==>|"Encrypted SDP Offer / Answer"| B
-  end
-
-  subgraph DirectP2P["3. Direct Data Channel (Zero Servers)"]
-    A <===>|"WebRTC DataChannel (Messages & Voice Notes)"| B
-    A <===>|"Chunked Binary Stream to OPFS"| B
-  end
-```
-
-- **Signaling**: Ephemeral Nostr WebSocket relays discover peers without requiring a custom signaling backend ([ADR-0002](docs/adr/0002-nostr-signaling-with-torrent-fallback.md)).
-- **Hash Fragment Key**: The Room Key is never sent in HTTP request headers or query parameters ([ADR-0003](docs/adr/0003-key-in-hash-fragment.md)).
-- **Transfer Pipeline**: Sliced file chunks transmitted through WebRTC DataChannels with adaptive backpressure management, received directly into OPFS file streams.
+- **Direct Messaging**: Low-latency room broadcasts or 1-to-1 targeted whispers.
+- **OPFS File Transfers**: Chunked direct transfers with backpressure control and live throughput/ETA telemetry.
+- **Voice Notes**: In-browser audio recording with Opus compression and interactive waveform preview.
+- **Screen Grabs**: Capture a display or window frame instantly without video call overhead.
+- **Connection Telemetry**: Live metrics for connection type (`Direct LAN` vs `Direct P2P`) and round-trip latency.
+- **Instant Pairing**: 1-click room link copying and built-in offline QR code generation for mobile devices.
+- **PWA & Mobile Ready**: Responsive edge-to-edge layout with safe-area support and offline PWA caching.
 
 ---
 
-## Domain Terminology
-
-To preserve conceptual clarity, this project adheres to canonical domain terms (see [`CONTEXT.md`](CONTEXT.md)):
-
-| Canonical Term  | Meaning                                                           | Terms Avoided                      |
-| :-------------- | :---------------------------------------------------------------- | :--------------------------------- |
-| **Portal**      | Public entry surface at `/` for creating or joining a room        | _Lobby, landing page, dashboard_   |
-| **Room**        | Ephemeral virtual space where peers discover and communicate      | _Channel, session, chatroom_       |
-| **Room Key**    | Shared secret string for discovery and end-to-end data encryption | _Password, PIN, token_             |
-| **Peer**        | An individual browser instance actively in a Room                 | _User, member, client, account_    |
-| **Persona**     | Ephemeral display name and avatar color for a Peer                | _Profile, username, handle_        |
-| **Recipient**   | The designated audience (entire room or single peer)              | _Destination, target_              |
-| **Transfer**    | Direct peer-to-peer transmission of binary data                   | _Upload (no server exists), sync_  |
-| **Download**    | Action of saving transferred file data onto local device          | _Fetch, pull_                      |
-| **Voice Note**  | Recorded audio memo captured in-browser and transmitted           | _Voice message, audio clip, call_  |
-| **Screen Grab** | Single still frame captured from display/window and sent          | _Screenshot, screen share, stream_ |
-| **Telemetry**   | Live measurement of transfer speed, ETA, and ping                 | _Analytics, stats, monitoring_     |
-| **Roster**      | Persistent panel or mobile drawer listing Room & Peers            | _Sidebar, user list, presence bar_ |
-| **Timeline**    | Chronological stream of messages, transfers, and notes            | _Chat feed, message log, stream_   |
-| **Composer**    | Pinned interactive tray for messages, files, and voice notes      | _Input box, chat bar, toolbar_     |
-
----
-
-## Development & Testing
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- **Node.js**: ≥ 18.0.0 (Node 22 recommended)
-- **pnpm**: ≥ 12.0.0
+- [Node.js](https://nodejs.org/) (≥ 18.0.0, Node 22 recommended)
+- [pnpm](https://pnpm.io/) (≥ 12.0.0)
 
-### Setup
+### Installation
 
 ```bash
 # Clone the repository
@@ -110,34 +58,69 @@ cd peer-box
 
 # Install dependencies
 pnpm install
+
+# Start development server
+pnpm dev
 ```
 
-### Local Commands
-
-| Command             | Action                                             |
-| :------------------ | :------------------------------------------------- |
-| `pnpm dev`          | Start local Vite development server                |
-| `pnpm build`        | Compile production bundle to `dist/`               |
-| `pnpm preview`      | Preview production build locally                   |
-| `pnpm test`         | Run Vitest test suites (unit & integration)        |
-| `pnpm test:watch`   | Run Vitest in interactive watch mode               |
-| `pnpm check`        | Run `svelte-check` and TypeScript type diagnostics |
-| `pnpm lint`         | Run ESLint across codebase                         |
-| `pnpm lint:fix`     | Automatically fix ESLint errors                    |
-| `pnpm format`       | Format files with Prettier                         |
-| `pnpm format:check` | Verify formatting with Prettier                    |
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
-## Documentation & Decisions
+## 📜 Available Scripts
 
-- **Domain Model & Glossary**: [`CONTEXT.md`](CONTEXT.md)
-- **Technical Specification**: [`SPEC.md`](SPEC.md)
-- **Agent Guidelines**: [`AGENTS.md`](AGENTS.md)
-- **Architectural Decision Records**:
-  - [ADR-0001: Zero-TURN Relay Architecture](docs/adr/0001-zero-turn-relay-architecture.md)
-  - [ADR-0002: Nostr Signaling with Torrent Fallback](docs/adr/0002-nostr-signaling-with-torrent-fallback.md)
-  - [ADR-0003: Key in Hash Fragment](docs/adr/0003-key-in-hash-fragment.md)
-  - [ADR-0004: Transparent WebRTC IP Disclosure](docs/adr/0004-transparent-webrtc-ip-disclosure.md)
-  - [ADR-0005: Full-Window Workspace, Minimal Portal, and Zero-JS Static Documentation](docs/adr/0005-full-window-workspace-and-seo-portal.md)
-- **AI Agent Context**: [`/llms.txt`](public/llms.txt) and [`/llms-full.txt`](public/llms-full.txt)
+| Command             | Description                                   |
+| :------------------ | :-------------------------------------------- |
+| `pnpm dev`          | Start Vite local development server           |
+| `pnpm build`        | Compile production bundle to `dist/`          |
+| `pnpm preview`      | Preview production build locally              |
+| `pnpm test`         | Run Vitest test suite                         |
+| `pnpm test:watch`   | Run Vitest in interactive watch mode          |
+| `pnpm check`        | Run `svelte-check` and TypeScript diagnostics |
+| `pnpm lint`         | Run ESLint across codebase                    |
+| `pnpm lint:fix`     | Automatically fix ESLint errors               |
+| `pnpm format`       | Format code with Prettier                     |
+| `pnpm format:check` | Check code formatting with Prettier           |
+
+---
+
+## 🛡️ Trust & Privacy Architecture
+
+PeerBox is built around four verifiable guarantees:
+
+1. **Zero Central Relays**: No central TURN servers relay your content ([ADR-0001](docs/adr/0001-zero-turn-relay-architecture.md)).
+2. **Decentralized Signaling**: Discovery operates over public Nostr relays without a custom backend ([ADR-0002](docs/adr/0002-nostr-signaling-with-torrent-fallback.md)).
+3. **Key in Hash Fragment**: The Room Key is never sent in HTTP request headers or query strings ([ADR-0003](docs/adr/0003-key-in-hash-fragment.md)).
+4. **Transparent IP Disclosure**: Direct WebRTC connections exchange IP addresses directly between peers; PeerBox discloses this transparently ([ADR-0004](docs/adr/0004-transparent-webrtc-ip-disclosure.md)).
+
+---
+
+## 📚 Documentation
+
+- [Domain Model & Glossary](CONTEXT.md) – Project terminology and conceptual boundaries.
+- [Technical Specification](SPEC.md) – Architectural contracts and protocols.
+- [Agent Guidelines](AGENTS.md) – Development conventions and issue triage workflow.
+- [Architecture Decision Records (ADRs)](docs/adr/) – Architectural history and trade-offs.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository and create your feature branch: `git checkout -b feature/my-feature`
+2. Ensure tests and typechecks pass:
+   ```bash
+   pnpm check
+   pnpm test
+   pnpm lint
+   pnpm format:check
+   ```
+3. Commit your changes and push to your fork.
+4. Open a Pull Request detailing the changes made.
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
