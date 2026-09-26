@@ -660,7 +660,7 @@
   }
 </script>
 
-<main class="app-main" class:in-room={!!currentRoomId}>
+<div class="app-main" class:in-room={!!currentRoomId}>
   {#if !currentRoomId}
     <PortalView
       bind:roomName={inputRoomName}
@@ -832,7 +832,7 @@
       </aside>
 
       <!-- Right Main Workspace Panel -->
-      <section class="workspace-main" data-testid="workspace-main">
+      <main class="workspace-main" data-testid="workspace-main">
         <!-- Workspace Top Header -->
         <header class="workspace-header">
           <div class="workspace-header-left">
@@ -1100,7 +1100,7 @@
             </div>
           </div>
         </footer>
-      </section>
+      </main>
 
       <!-- Nickname Edit Modal / Popover -->
       {#if isEditingNickname}
@@ -1228,7 +1228,7 @@
       {/if}
     </div>
   {/if}
-</main>
+</div>
 
 <style>
   .app-main {

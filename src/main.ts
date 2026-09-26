@@ -12,6 +12,7 @@ if (!target) {
 void registerServiceWorker();
 
 const transport = new TrysteroTransport();
+target.innerHTML = '';
 const app = mount(App, { target, props: { transport } });
 
 export default app;

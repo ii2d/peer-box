@@ -28,6 +28,36 @@ describe('PeerBox App Component', () => {
     target.remove();
   });
 
+  it('renders exactly one <main> element with no nested <main> tags', () => {
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('test-peer');
+    const component = mount(App, { target, props: { transport } });
+
+    const mainElements = target.querySelectorAll('main');
+    expect(mainElements.length).toBe(1);
+
+    unmount(component);
+    target.remove();
+  });
+
+  it('renders exactly one <main> element in room view', async () => {
+    window.history.replaceState({}, '', '/test-room');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('test-peer');
+    const component = mount(App, { target, props: { transport } });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    const mainElements = target.querySelectorAll('main');
+    expect(mainElements.length).toBe(1);
+    expect(mainElements[0].getAttribute('data-testid')).toBe('workspace-main');
+
+    unmount(component);
+    target.remove();
+  });
+
   it('generates random adjective-noun pair when clicking random button', () => {
     const target = document.createElement('div');
     document.body.appendChild(target);
