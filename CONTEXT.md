@@ -6,6 +6,10 @@ PeerBox is a serverless, peer-to-peer communication space for real-time messagin
 
 ### Space & Security
 
+**Portal**:
+The public entry surface of PeerBox for creating or joining a Room, exploring architectural guarantees, and launching the offline app shell.
+_Avoid_: Lobby, landing page, home page, dashboard
+
 **Room**:
 An ephemeral virtual space where two or more peers discover each other and communicate.
 _Avoid_: Channel, session, lobby, chatroom
@@ -53,3 +57,17 @@ _Avoid_: Screenshot, screen share, stream
 **Telemetry**:
 Live measurement of transfer throughput (speed), estimated time remaining (ETA), and round-trip connection latency between peers.
 _Avoid_: Analytics, stats, monitoring
+
+### Workspace & Layout
+
+**Roster**:
+The persistent panel or mobile drawer displaying the active Room's identity, encryption state, and participating Peers with their real-time connection telemetry.
+_Avoid_: Sidebar, user list, member list, presence bar
+
+**Timeline**:
+The chronological, full-height stream of messages, voice notes, screen grabs, and transfers exchanged within a Room.
+_Avoid_: Chat feed, message log, stream, history
+
+**Composer**:
+The pinned interactive input tray used to author messages, record Voice Notes, attach files for Transfer, or trigger Screen Grabs.
+_Avoid_: Input box, chat bar, message input, toolbar
