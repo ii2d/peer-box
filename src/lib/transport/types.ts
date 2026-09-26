@@ -35,7 +35,7 @@ export interface RoomTransport {
   onPeerJoin(cb: (peer: PeerInfo) => void): () => void;
   onPeerLeave(cb: (peerId: string) => void): () => void;
 
-  sendAction<T>(actionName: string, payload: T, targetPeerId?: string): void;
+  sendAction<T>(actionName: string, payload: T, targetPeerId?: string): Promise<void> | void;
   onAction<T>(actionName: string, cb: (payload: T, senderId: string) => void): () => void;
 
   getPeerStats?(peerId: string): Promise<PeerConnectionStats | null>;

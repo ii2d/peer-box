@@ -52,7 +52,7 @@ class MemoryFileStorage implements FileStorage {
 class OpfsFileStorage implements FileStorage {
   readonly isOpfs = true;
 
-  async createSink(fileName: string): Promise<FileStorageSink> {
+  async createSink(fileName: string, mimeType = ''): Promise<FileStorageSink> {
     const root = await navigator.storage.getDirectory();
     const tempName = `temp_${Date.now()}_${fileName}`;
     const fileHandle = await root.getFileHandle(tempName, { create: true });
@@ -64,7 +64,11 @@ class OpfsFileStorage implements FileStorage {
       },
       async close(): Promise<File> {
         await writable.close();
-        return await fileHandle.getFile();
+        const rawFile = await fileHandle.getFile();
+        return new File([rawFile], fileName, {
+          type: mimeType || rawFile.type || 'application/octet-stream',
+          lastModified: Date.now(),
+        });
       },
       async abort(): Promise<void> {
         try {

@@ -1,6 +1,6 @@
 import type { Persona } from '../persona/persona';
 import type { RoomTransport } from '../transport/types';
-import { base64ToUint8Array, uint8ArrayToBase64 } from './base64';
+import { packChunk, unpackChunk } from './binary-chunk';
 import { detectMediaCategory } from './media-type';
 import {
   createStorage,
@@ -12,7 +12,6 @@ import { createTransferTelemetry, type TransferTelemetry } from './telemetry';
 import type {
   FileTransferAck,
   FileTransferCancel,
-  FileTransferChunk,
   FileTransferDecision,
   FileTransferItem,
   FileTransferMeta,
@@ -20,7 +19,7 @@ import type {
 } from './types';
 
 export const MAX_SMALL_FILE_SIZE = 25 * 1024 * 1024; // 25MB threshold
-export const DEFAULT_CHUNK_SIZE = 64 * 1024; // 64KB chunks
+export const DEFAULT_CHUNK_SIZE = 128 * 1024; // 128KB chunks
 
 export interface TransferServiceOptions {
   transport: RoomTransport;
@@ -32,6 +31,10 @@ export interface TransferServiceOptions {
 interface ActiveIncomingTransfer {
   meta: FileTransferMeta;
   sink?: FileStorageSink;
+  sinkPromise?: Promise<FileStorageSink | undefined>;
+  pendingChunks: Map<number, Uint8Array>;
+  nextWriteIndex: number;
+  isWriting: boolean;
   receivedChunks: number;
   bytesReceived: number;
   telemetry: TransferTelemetry;
@@ -73,8 +76,8 @@ export class TransferService {
     );
 
     this.unsubs.push(
-      this.transport.onAction<FileTransferChunk>('file-chunk', (chunk) => {
-        this.handleIncomingChunk(chunk);
+      this.transport.onAction('file-chunk', (chunk) => {
+        void this.handleIncomingChunk(chunk);
       }),
     );
 
@@ -145,6 +148,9 @@ export class TransferService {
 
     const incomingTransfer: ActiveIncomingTransfer = {
       meta: validatedMeta,
+      pendingChunks: new Map(),
+      nextWriteIndex: 0,
+      isWriting: false,
       receivedChunks: 0,
       bytesReceived: 0,
       telemetry: createTransferTelemetry(meta.size),
@@ -156,26 +162,36 @@ export class TransferService {
 
     // If small file, auto-accept immediately
     if (!meta.isLarge) {
-      this.startIncomingSink(meta.id);
+      void this.startIncomingSink(meta.id);
     }
   }
 
-  private async startIncomingSink(transferId: string): Promise<void> {
+  private startIncomingSink(transferId: string): Promise<FileStorageSink | undefined> {
     const inc = this.incoming.get(transferId);
-    const item = this.transfers.get(transferId);
-    if (!inc || !item || inc.sink) return;
+    if (!inc) return Promise.resolve(undefined);
+    if (inc.sinkPromise) return inc.sinkPromise;
 
-    try {
-      inc.sink = await this.storage.createSink(inc.meta.name, inc.meta.mimeType);
-    } catch {
-      // Fallback
-    }
+    inc.sinkPromise = (async () => {
+      try {
+        inc.sink = await this.storage.createSink(inc.meta.name, inc.meta.mimeType);
+      } catch (err) {
+        console.warn('Primary storage sink creation failed, falling back to memory sink', err);
+        const memStorage = createStorage({ forceMemory: true });
+        inc.sink = await memStorage.createSink(inc.meta.name, inc.meta.mimeType);
+      }
 
-    // Set up 500ms telemetry & sync acks
-    inc.ackTimer = setInterval(() => {
-      if (inc.cancelled) return;
-      this.sendAckToPeer(transferId);
-    }, 500);
+      // Set up 500ms telemetry & sync acks
+      if (!inc.ackTimer) {
+        inc.ackTimer = setInterval(() => {
+          if (inc.cancelled) return;
+          this.sendAckToPeer(transferId);
+        }, 500);
+      }
+
+      return inc.sink;
+    })();
+
+    return inc.sinkPromise;
   }
 
   private sendAckToPeer(transferId: string): void {
@@ -276,6 +292,7 @@ export class TransferService {
     if (inc.sink) {
       inc.sink.abort().catch(() => {});
     }
+    inc.pendingChunks.clear();
     this.incoming.delete(transferId);
   }
 
@@ -321,18 +338,20 @@ export class TransferService {
     this.notify(item);
   }
 
-  private async handleIncomingChunk(chunk: FileTransferChunk): Promise<void> {
+  private async handleIncomingChunk(rawPacket: unknown): Promise<void> {
+    const chunk = unpackChunk(rawPacket);
     const inc = this.incoming.get(chunk.transferId);
     const item = this.transfers.get(chunk.transferId);
     if (!inc || !item || inc.cancelled) return;
 
-    const bytes = base64ToUint8Array(chunk.data);
+    if (!inc.sinkPromise) {
+      void this.startIncomingSink(chunk.transferId);
+    }
+
+    const bytes = chunk.data;
     inc.receivedChunks++;
     inc.bytesReceived += bytes.byteLength;
-
-    if (inc.sink) {
-      await inc.sink.write(bytes);
-    }
+    inc.pendingChunks.set(chunk.chunkIndex, bytes);
 
     inc.telemetry.update(inc.bytesReceived);
 
@@ -341,50 +360,72 @@ export class TransferService {
     item.progress = Math.min(1, inc.bytesReceived / inc.meta.size);
     item.speed = inc.telemetry.getSpeedFormatted();
     item.eta = inc.telemetry.getEtaFormatted();
-
-    if (inc.receivedChunks >= inc.meta.totalChunks) {
-      // Finalize transfer
-      if (inc.ackTimer) {
-        clearInterval(inc.ackTimer);
-        inc.ackTimer = undefined;
-      }
-      // Send final ack
-      this.sendAckToPeer(chunk.transferId);
-
-      let blob: Blob | undefined;
-      if (inc.sink) {
-        blob = await inc.sink.close();
-      } else {
-        blob = new Blob([bytes as unknown as BlobPart], { type: inc.meta.mimeType });
-      }
-
-      let blobUrl = '';
-      try {
-        if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
-          blobUrl = URL.createObjectURL(blob);
-        }
-      } catch {
-        blobUrl = `blob:peerbox-${Math.random().toString(36).slice(2, 9)}`;
-      }
-
-      item.blob = blob;
-      item.blobUrl = blobUrl;
-      item.status = 'completed';
-      item.progress = 1;
-      item.eta = '0s';
-
-      if (item.mediaCategory === 'code' && typeof blob.text === 'function') {
-        try {
-          item.textContent = await blob.text();
-        } catch {
-          // ignore
-        }
-      }
-
-      this.incoming.delete(chunk.transferId);
-    }
-
     this.notify(item);
+
+    await this.drainPendingChunks(chunk.transferId);
+  }
+
+  private async drainPendingChunks(transferId: string): Promise<void> {
+    const inc = this.incoming.get(transferId);
+    const item = this.transfers.get(transferId);
+    if (!inc || !item || inc.cancelled || inc.isWriting) return;
+
+    inc.isWriting = true;
+    try {
+      const sink = inc.sink || (await inc.sinkPromise);
+      if (!sink) return;
+
+      while (inc.pendingChunks.has(inc.nextWriteIndex)) {
+        if (inc.cancelled) break;
+        const chunkData = inc.pendingChunks.get(inc.nextWriteIndex)!;
+        await sink.write(chunkData);
+        inc.pendingChunks.delete(inc.nextWriteIndex);
+        inc.nextWriteIndex++;
+      }
+
+      if (inc.nextWriteIndex >= inc.meta.totalChunks && !inc.cancelled) {
+        if (inc.ackTimer) {
+          clearInterval(inc.ackTimer);
+          inc.ackTimer = undefined;
+        }
+        this.sendAckToPeer(transferId);
+
+        const blob = await sink.close();
+
+        let blobUrl = '';
+        try {
+          if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+            blobUrl = URL.createObjectURL(blob);
+          }
+        } catch {
+          blobUrl = `blob:peerbox-${Math.random().toString(36).slice(2, 9)}`;
+        }
+
+        item.blob = blob;
+        item.blobUrl = blobUrl;
+        item.status = 'completed';
+        item.progress = 1;
+        item.eta = '0s';
+
+        if (item.mediaCategory === 'code' && typeof blob.text === 'function') {
+          try {
+            item.textContent = await blob.text();
+          } catch {
+            // ignore
+          }
+        }
+
+        this.incoming.delete(transferId);
+        this.notify(item);
+      }
+    } catch (err) {
+      console.error('Error draining transfer chunks to sink', err);
+    } finally {
+      inc.isWriting = false;
+      if (inc.pendingChunks.has(inc.nextWriteIndex) && !inc.cancelled) {
+        void this.drainPendingChunks(transferId);
+      }
+    }
   }
 
   async sendFile(
@@ -485,15 +526,10 @@ export class TransferService {
       const end = Math.min(start + this.chunkSize, file.size);
       const slice = file.slice(start, end);
       const arrayBuffer = await slice.arrayBuffer();
-      const b64 = uint8ArrayToBase64(new Uint8Array(arrayBuffer));
+      const rawBytes = new Uint8Array(arrayBuffer);
+      const packet = packChunk(transferId, i, rawBytes);
 
-      const chunkPayload: FileTransferChunk = {
-        transferId,
-        chunkIndex: i,
-        data: b64,
-      };
-
-      this.transport.sendAction('file-chunk', chunkPayload, targetPeerId);
+      await this.transport.sendAction('file-chunk', packet, targetPeerId);
 
       // On sender side, also track local upload progress if no ack received yet
       if (!isLarge) {
@@ -501,10 +537,6 @@ export class TransferService {
         item.bytesTransferred = end;
         item.progress = (i + 1) / totalChunks;
         this.notify(item);
-      }
-
-      if (i % 4 === 0) {
-        await new Promise((r) => setTimeout(r, 0));
       }
     }
 

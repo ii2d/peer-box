@@ -202,11 +202,11 @@ export class TrysteroTransport implements RoomTransport {
       const rawAction = this.room.makeAction(actionName);
       const listeners = new Set<(payload: unknown, senderId: string) => void>();
 
-      let sendFn: (data: unknown, targetPeerId?: string) => void;
+      let sendFn: (data: unknown, targetPeerId?: string) => Promise<unknown> | void;
 
       if (Array.isArray(rawAction)) {
         const [send, onReceive] = rawAction;
-        sendFn = send;
+        sendFn = (data: unknown, targetPeerId?: string) => send(data, targetPeerId);
         onReceive((data: unknown, peerId: string) => {
           for (const listener of listeners) {
             listener(data, peerId);
@@ -215,9 +215,9 @@ export class TrysteroTransport implements RoomTransport {
       } else {
         sendFn = (data: unknown, targetPeerId?: string) => {
           if (targetPeerId) {
-            rawAction.send(data, { target: targetPeerId });
+            return rawAction.send(data, { target: targetPeerId });
           } else {
-            rawAction.send(data);
+            return rawAction.send(data);
           }
         };
         rawAction.onMessage = (data: unknown, meta: { peerId: string }) => {
@@ -234,14 +234,14 @@ export class TrysteroTransport implements RoomTransport {
     return entry;
   }
 
-  sendAction<T>(actionName: string, payload: T, targetPeerId?: string): void {
+  async sendAction<T>(actionName: string, payload: T, targetPeerId?: string): Promise<void> {
     const action = this.getOrCreateAction(actionName);
     if (!action) return;
 
     if (targetPeerId) {
-      action.send(payload, targetPeerId);
+      await action.send(payload, targetPeerId);
     } else {
-      action.send(payload);
+      await action.send(payload);
     }
   }
 
