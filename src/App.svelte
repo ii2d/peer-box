@@ -17,6 +17,8 @@
   import { InMemoryTransport } from './lib/transport/in-memory-transport';
   import type { PeerInfo, RoomTransport } from './lib/transport/types';
   import VoiceNoteRecorder from './lib/voice/VoiceNoteRecorder.svelte';
+  import { captureScreenGrab } from './lib/screengrab/screengrab';
+  import ScreenGrabPreviewTray from './lib/screengrab/ScreenGrabPreviewTray.svelte';
 
   interface Props {
     transport?: RoomTransport;
@@ -56,6 +58,10 @@
   let transferService: TransferService | null = null;
   let transfers = $state<FileTransferItem[]>([]);
   let transferError = $state<string | null>(null);
+
+  // Screen Grab State
+  let activeScreenGrab = $state<{ file: File; previewUrl: string } | null>(null);
+  let screenGrabError = $state<string | null>(null);
   let isDraggingOver = $state(false);
   let dragCounter = 0;
   let activeLightbox = $state<{ src: string; name: string; size: number } | null>(null);
@@ -328,6 +334,70 @@
 
   async function handleSendVoiceNote(file: File) {
     await handleSendFiles([file]);
+  }
+
+  async function handleCaptureScreenGrab() {
+    screenGrabError = null;
+    try {
+      const file = await captureScreenGrab();
+      let previewUrl = '';
+      try {
+        if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+          previewUrl = URL.createObjectURL(file);
+        }
+      } catch {
+        previewUrl = '';
+      }
+      activeScreenGrab = { file, previewUrl };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Screen capture failed';
+      if (!msg.toLowerCase().includes('cancel') && !msg.toLowerCase().includes('abort')) {
+        screenGrabError = msg;
+        setTimeout(() => {
+          screenGrabError = null;
+        }, 5000);
+      }
+    }
+  }
+
+  function handleCancelScreenGrab() {
+    if (activeScreenGrab?.previewUrl) {
+      try {
+        URL.revokeObjectURL(activeScreenGrab.previewUrl);
+      } catch {
+        // ignore
+      }
+    }
+    activeScreenGrab = null;
+  }
+
+  async function handleSendScreenGrab(file: File, caption: string, recipientId: string) {
+    let targetRecipient: { id: string; name?: string } | null = null;
+    if (recipientId !== 'everyone') {
+      const peer = connectedPeers.find((p) => p.id === recipientId);
+      targetRecipient = {
+        id: recipientId,
+        name: peer?.name || recipientId,
+      };
+    }
+
+    if (caption && chatService) {
+      chatService.sendMessage(caption, targetRecipient);
+    }
+
+    if (transferService) {
+      try {
+        await transferService.sendFile(file, targetRecipient);
+      } catch (err: unknown) {
+        transferError = err instanceof Error ? err.message : 'File transfer failed';
+        setTimeout(() => {
+          transferError = null;
+        }, 5000);
+      }
+    }
+
+    handleCancelScreenGrab();
+    scrollToBottom();
   }
 
   function handleAcceptTransfer(transferId: string) {
@@ -765,6 +835,23 @@
         </div>
       {/if}
 
+      {#if screenGrabError}
+        <div class="transfer-error-toast" data-testid="screengrab-error">
+          ⚠️ {screenGrabError}
+        </div>
+      {/if}
+
+      {#if activeScreenGrab}
+        <ScreenGrabPreviewTray
+          file={activeScreenGrab.file}
+          previewUrl={activeScreenGrab.previewUrl}
+          peers={connectedPeers}
+          initialRecipientId={selectedRecipientId}
+          onSend={handleSendScreenGrab}
+          onCancel={handleCancelScreenGrab}
+        />
+      {/if}
+
       <!-- Composer & Recipient Selector -->
       <div class="composer-container">
         <div class="composer-toolbar">
@@ -803,6 +890,17 @@
                 : connectedPeers.find((p) => p.id === selectedRecipientId)?.name || 'Selected Peer'}
               onSend={handleSendVoiceNote}
             />
+
+            <button
+              type="button"
+              class="btn-screengrab"
+              data-testid="screengrab-btn"
+              title="Capture Screen Grab"
+              onclick={handleCaptureScreenGrab}
+            >
+              <span class="screengrab-icon">📸</span>
+              <span class="screengrab-text">Screen Grab</span>
+            </button>
           </div>
         </div>
 
@@ -1387,6 +1485,26 @@
   }
 
   .btn-attach:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .btn-screengrab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.65rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--card-border);
+    border-radius: 0.5rem;
+    color: var(--text-main);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+
+  .btn-screengrab:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.25);
   }

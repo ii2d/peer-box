@@ -522,4 +522,90 @@ describe('PeerBox App Component', () => {
     unmount(component);
     target.remove();
   });
+
+  it('captures screen grab, opens preview tray, and allows sending with caption', async () => {
+    window.history.replaceState({}, '', '/screen-room');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('user-local');
+
+    // Mock mediaDevices & canvas for screen grab
+    const mockTrack = { stop: vi.fn() };
+    const mockStream = { getTracks: () => [mockTrack] };
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: {
+        getDisplayMedia: vi.fn().mockResolvedValue(mockStream),
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      if (tagName === 'canvas') {
+        const canvas = origCreateElement('canvas');
+        canvas.getContext = vi.fn().mockReturnValue({
+          drawImage: vi.fn(),
+        }) as unknown as typeof canvas.getContext;
+        canvas.toBlob = vi.fn((cb: (b: Blob) => void) => {
+          cb(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }));
+        }) as unknown as typeof canvas.toBlob;
+        return canvas;
+      }
+      if (tagName === 'video') {
+        const video = origCreateElement('video');
+        video.play = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(video, 'srcObject', {
+          set() {
+            setTimeout(() => {
+              Object.defineProperty(video, 'videoWidth', { value: 800 });
+              Object.defineProperty(video, 'videoHeight', { value: 600 });
+              video.dispatchEvent(new Event('canplay'));
+            }, 10);
+          },
+        });
+        return video;
+      }
+      return origCreateElement(tagName);
+    });
+
+    const component = mount(App, { target, props: { transport } });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    const screengrabBtn = target.querySelector<HTMLButtonElement>('[data-testid="screengrab-btn"]');
+    expect(screengrabBtn).not.toBeNull();
+    screengrabBtn?.click();
+
+    await new Promise((r) => setTimeout(r, 40));
+    flushSync();
+
+    // Verify preview tray is open
+    expect(target.querySelector('[data-testid="screengrab-tray"]')).not.toBeNull();
+    expect(target.querySelector('[data-testid="screengrab-preview"]')).not.toBeNull();
+
+    // Add caption
+    const captionInput = target.querySelector<HTMLInputElement>(
+      '[data-testid="screengrab-caption-input"]',
+    );
+    expect(captionInput).not.toBeNull();
+    captionInput!.value = 'Check out this screen frame';
+    captionInput!.dispatchEvent(new Event('input'));
+    flushSync();
+
+    // Click send
+    const sendBtn = target.querySelector<HTMLButtonElement>('[data-testid="screengrab-send-btn"]');
+    sendBtn?.click();
+    await new Promise((r) => setTimeout(r, 20));
+    flushSync();
+
+    // Tray closes
+    expect(target.querySelector('[data-testid="screengrab-tray"]')).toBeNull();
+
+    // Verify caption message rendered in timeline
+    expect(target.textContent).toContain('Check out this screen frame');
+
+    unmount(component);
+    target.remove();
+  });
 });
