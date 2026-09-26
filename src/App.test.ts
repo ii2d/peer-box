@@ -323,7 +323,7 @@ describe('PeerBox App Component', () => {
     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
     flushSync();
 
-    await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 60));
     flushSync();
 
     const transferItem = target.querySelector('[data-testid="transfer-item"]');

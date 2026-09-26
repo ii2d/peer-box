@@ -19,7 +19,7 @@ interface TrysteroRoom {
         (cb: (data: unknown, peerId: string) => void) => void,
       ];
   getPeers?: () => Record<string, RTCPeerConnection>;
-  leave: () => void;
+  leave: () => Promise<void> | void;
 }
 
 export interface TrysteroTransportOptions {
@@ -85,7 +85,7 @@ export class TrysteroTransport implements RoomTransport {
 
   async joinRoom(config: RoomTransportConfig): Promise<void> {
     if (this._roomId) {
-      this.leaveRoom();
+      await this.leaveRoom();
     }
 
     this._roomId = config.roomId;
@@ -160,16 +160,23 @@ export class TrysteroTransport implements RoomTransport {
     }
   }
 
-  leaveRoom(): void {
+  async leaveRoom(): Promise<void> {
     if (this.room) {
-      this.room.onPeerJoin = null;
-      this.room.onPeerLeave = null;
+      const roomToLeave = this.room;
+      this.room = null;
+      roomToLeave.onPeerJoin = null;
+      roomToLeave.onPeerLeave = null;
       try {
-        this.room.leave();
+        const leaveResult = roomToLeave.leave();
+        if (leaveResult && typeof (leaveResult as Promise<void>).then === 'function') {
+          await Promise.race([
+            leaveResult,
+            new Promise((resolve) => setTimeout(resolve, 150)),
+          ]);
+        }
       } catch {
         // Safe cleanup
       }
-      this.room = null;
     }
     this.peers.clear();
     this.actionHandlers.clear();

@@ -268,6 +268,11 @@
         transferService = null;
       }
 
+      connectedPeers = [];
+      peerStats = {};
+      selectedRecipientId = 'everyone';
+      selectedDiagnosticsPeerId = null;
+
       await transport.joinRoom({ roomId, roomKey });
       currentRoomId = roomId;
       currentRoomKey = roomKey;
@@ -339,7 +344,7 @@
       transferService = null;
     }
 
-    transport.leaveRoom();
+    void transport.leaveRoom();
     currentRoomId = null;
     currentRoomKey = null;
     inputRoomName = '';

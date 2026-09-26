@@ -77,4 +77,30 @@ describe('InMemoryTransport Seam', () => {
     expect(peer1.getPeers()).toEqual([]);
     expect(leftPeerId).toBe('peer-2');
   });
+
+  it('allows host and joiner to re-connect when both change to the same new room key', async () => {
+    const host = new InMemoryTransport('host');
+    const joiner = new InMemoryTransport('joiner');
+
+    // Both join with initial key
+    await host.joinRoom({ roomId: 'cute-dog', roomKey: 'initial-key' });
+    await joiner.joinRoom({ roomId: 'cute-dog', roomKey: 'initial-key' });
+
+    expect(host.getPeers().map((p) => p.id)).toContain('joiner');
+    expect(joiner.getPeers().map((p) => p.id)).toContain('host');
+
+    // 1. Host changes the key
+    await host.joinRoom({ roomId: 'cute-dog', roomKey: 'new-key' });
+
+    // Host should no longer see joiner while joiner is on old key
+    expect(host.getPeers().map((p) => p.id)).not.toContain('joiner');
+
+    // 2. Joiner changes to the same key
+    await joiner.joinRoom({ roomId: 'cute-dog', roomKey: 'new-key' });
+
+    // Both should now be reconnected with each other
+    expect(host.getPeers().map((p) => p.id)).toContain('joiner');
+    expect(joiner.getPeers().map((p) => p.id)).toContain('host');
+  });
 });
+

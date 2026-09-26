@@ -29,7 +29,7 @@ export interface RoomTransport {
   readonly currentRoomKey: string | null;
 
   joinRoom(config: RoomTransportConfig): Promise<void>;
-  leaveRoom(): void;
+  leaveRoom(): Promise<void> | void;
   getPeers(): PeerInfo[];
 
   onPeerJoin(cb: (peer: PeerInfo) => void): () => void;

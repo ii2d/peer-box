@@ -122,4 +122,53 @@ describe('TrysteroTransport Adapter', () => {
 
     transport.leaveRoom();
   });
+
+  it('awaits previous room leave and creates new room instance with updated password on key change', async () => {
+    let leaveResolved = false;
+    const leaveMock1 = vi.fn().mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      leaveResolved = true;
+    });
+
+    const mockRoom1 = {
+      onPeerJoin: vi.fn(),
+      onPeerLeave: vi.fn(),
+      makeAction: vi.fn(() => ({ send: vi.fn(), onMessage: null })),
+      leave: leaveMock1,
+    };
+
+    const mockRoom2 = {
+      onPeerJoin: vi.fn(),
+      onPeerLeave: vi.fn(),
+      makeAction: vi.fn(() => ({ send: vi.fn(), onMessage: null })),
+      leave: vi.fn(),
+    };
+
+    const joinRoomFn = vi
+      .fn()
+      .mockReturnValueOnce(mockRoom1)
+      .mockReturnValueOnce(mockRoom2);
+
+    const transport = new TrysteroTransport({
+      joinRoomFn,
+      appId: 'test-app',
+    });
+
+    await transport.joinRoom({ roomId: 'test-room', roomKey: 'key-1' });
+    expect(joinRoomFn).toHaveBeenCalledWith(
+      { appId: 'test-app', password: 'key-1' },
+      'test-room',
+    );
+
+    // Now change key
+    await transport.joinRoom({ roomId: 'test-room', roomKey: 'key-2' });
+
+    // Must have awaited the previous room's leave before calling joinRoomFn for the second room
+    expect(leaveMock1).toHaveBeenCalled();
+    expect(leaveResolved).toBe(true);
+    expect(joinRoomFn).toHaveBeenLastCalledWith(
+      { appId: 'test-app', password: 'key-2' },
+      'test-room',
+    );
+  });
 });

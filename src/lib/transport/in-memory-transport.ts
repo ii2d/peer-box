@@ -2,7 +2,6 @@ import type { PeerConnectionStats, PeerInfo, RoomTransport, RoomTransportConfig 
 
 interface RoomState {
   peers: Set<InMemoryTransport>;
-  roomKey: string | null;
 }
 
 const activeRooms = new Map<string, RoomState>();
@@ -47,22 +46,18 @@ export class InMemoryTransport implements RoomTransport {
     if (!room) {
       room = {
         peers: new Set(),
-        roomKey: this._roomKey,
       };
       activeRooms.set(config.roomId, room);
     }
 
-    // Trystero encryption key isolation:
-    // If keys don't match, peers cannot see or communicate with each other
-    const keysMatch = (room.roomKey ?? null) === (this._roomKey ?? null);
+    room.peers.add(this);
 
-    if (keysMatch) {
-      room.peers.add(this);
-      // Notify existing matching peers in room of our arrival
-      for (const peer of room.peers) {
-        if (peer !== this) {
-          peer._dispatchPeerJoin({ id: this.localPeerId });
-        }
+    // Trystero encryption key isolation:
+    // Only peers with matching room keys discover each other
+    for (const peer of room.peers) {
+      if (peer !== this && (peer.currentRoomKey ?? null) === (this._roomKey ?? null)) {
+        peer._dispatchPeerJoin({ id: this.localPeerId });
+        this._dispatchPeerJoin({ id: peer.localPeerId });
       }
     }
   }
@@ -74,7 +69,9 @@ export class InMemoryTransport implements RoomTransport {
     if (room && room.peers.has(this)) {
       room.peers.delete(this);
       for (const peer of room.peers) {
-        peer._dispatchPeerLeave(this.localPeerId);
+        if ((peer.currentRoomKey ?? null) === (this._roomKey ?? null)) {
+          peer._dispatchPeerLeave(this.localPeerId);
+        }
       }
       if (room.peers.size === 0) {
         activeRooms.delete(this._roomId);
@@ -92,7 +89,7 @@ export class InMemoryTransport implements RoomTransport {
 
     const result: PeerInfo[] = [];
     for (const peer of room.peers) {
-      if (peer !== this) {
+      if (peer !== this && (peer.currentRoomKey ?? null) === (this._roomKey ?? null)) {
         result.push({ id: peer.localPeerId });
       }
     }
@@ -116,6 +113,8 @@ export class InMemoryTransport implements RoomTransport {
 
     for (const peer of room.peers) {
       if (peer === this) continue;
+      // Key isolation: only peers with matching key receive actions
+      if ((peer.currentRoomKey ?? null) !== (this._roomKey ?? null)) continue;
       if (targetPeerId && peer.localPeerId !== targetPeerId) continue;
       peer._receiveAction(actionName, payload, this.localPeerId);
     }
