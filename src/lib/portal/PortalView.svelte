@@ -24,25 +24,35 @@
 </script>
 
 <div class="portal-wrapper">
-  <!-- Minimal Top Navigation Bar -->
-  <header class="portal-nav">
-    <div class="portal-nav-inner">
-      <a href="/" class="nav-brand">
-        <span class="nav-brand-icon">📦</span>
-        <span class="nav-brand-text">PeerBox</span>
+  <!-- Unified Top Navigation Bar -->
+  <header class="docs-header">
+    <div class="docs-header-inner">
+      <a href="/" class="docs-brand">
+        <span class="docs-brand-icon">📦</span>
+        <span>PeerBox</span>
       </a>
-      <nav class="nav-links" aria-label="Portal Navigation">
-        <a href="/about/" class="nav-link">About</a>
-        <a href="/faq/" class="nav-link">FAQ</a>
+      <nav class="docs-nav-links" aria-label="Main Navigation">
+        <a href="/" class="docs-nav-link active">App</a>
+        <a href="/about/" class="docs-nav-link">About</a>
+        <a href="/faq/" class="docs-nav-link">FAQ</a>
+        <a href="/privacy/" class="docs-nav-link">Privacy &amp; Trust</a>
         <a
           href="https://github.com/ii2d/peer-box"
           target="_blank"
           rel="noreferrer"
-          class="nav-link"
+          class="docs-nav-link"
         >
           GitHub
         </a>
       </nav>
+      <button
+        type="button"
+        class="docs-cta-btn"
+        data-testid="header-instant-btn"
+        onclick={onCreateInstant}
+      >
+        ⚡ Instant Room
+      </button>
     </div>
   </header>
 
@@ -162,59 +172,6 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-  }
-
-  /* Minimal Top Navigation */
-  .portal-nav {
-    width: 100%;
-    padding: 1rem 1.5rem;
-    z-index: 10;
-  }
-
-  .portal-nav-inner {
-    max-width: 1100px;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .nav-brand {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    text-decoration: none;
-    color: var(--text-main);
-    font-weight: 700;
-    font-size: 1.1rem;
-    letter-spacing: -0.02em;
-    transition: opacity 0.15s ease;
-  }
-
-  .nav-brand:hover {
-    opacity: 0.85;
-  }
-
-  .nav-brand-icon {
-    font-size: 1.25rem;
-  }
-
-  .nav-links {
-    display: flex;
-    align-items: center;
-    gap: 1.25rem;
-  }
-
-  .nav-link {
-    color: var(--text-muted);
-    text-decoration: none;
-    font-size: 0.875rem;
-    font-weight: 500;
-    transition: color 0.15s ease;
-  }
-
-  .nav-link:hover {
-    color: #ffffff;
   }
 
   /* Centered Main Stage */

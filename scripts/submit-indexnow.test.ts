@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   submitIndexNow,
-  INDEXNOW_KEY,
   INDEXNOW_HOST,
   INDEXNOW_ENDPOINT,
   INDEXNOW_URLS,

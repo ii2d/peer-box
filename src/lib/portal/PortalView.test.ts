@@ -29,7 +29,7 @@ describe('PortalView Component', () => {
     target.remove();
   });
 
-  it('renders top navigation bar with links to About, FAQ, and GitHub', () => {
+  it('renders top navigation bar with links to App, About, FAQ, Privacy, and GitHub', () => {
     const target = document.createElement('div');
     document.body.appendChild(target);
 
@@ -38,13 +38,19 @@ describe('PortalView Component', () => {
       props: {},
     });
 
+    const appLink = target.querySelector<HTMLAnchorElement>('.docs-nav-links a[href="/"]');
     const aboutLink = target.querySelector<HTMLAnchorElement>('a[href="/about/"]');
     const faqLink = target.querySelector<HTMLAnchorElement>('a[href="/faq/"]');
+    const privacyLink = target.querySelector<HTMLAnchorElement>('.docs-nav-links a[href="/privacy/"]');
     const githubLink = target.querySelector<HTMLAnchorElement>('a[href*="github.com"]');
+    const headerInstantBtn = target.querySelector<HTMLButtonElement>('[data-testid="header-instant-btn"]');
 
+    expect(appLink).not.toBeNull();
     expect(aboutLink).not.toBeNull();
     expect(faqLink).not.toBeNull();
+    expect(privacyLink).not.toBeNull();
     expect(githubLink).not.toBeNull();
+    expect(headerInstantBtn).not.toBeNull();
 
     // Verify below-the-fold sections have been relocated to dedicated subpages
     expect(target.querySelector('.features-section')).toBeNull();
@@ -53,7 +59,7 @@ describe('PortalView Component', () => {
     expect(target.querySelector('.faq-item')).toBeNull();
 
     // Verify footer links
-    expect(target.querySelector('a[href="/privacy/"]')).not.toBeNull();
+    expect(target.querySelector('footer a[href="/privacy/"]')).not.toBeNull();
     expect(target.querySelector('a[href="/llms.txt"]')).not.toBeNull();
 
     unmount(component);
