@@ -1,5 +1,6 @@
 <script lang="ts">
   import ConnectionBadge from '../diagnostics/ConnectionBadge.svelte';
+  import BrandIcon from '../ui/BrandIcon.svelte';
   import type { Persona } from '../persona/persona';
   import { buildRoomUrl } from '../room/url';
   import type { PeerConnectionStats, PeerInfo } from '../transport/types';
@@ -63,7 +64,7 @@
 <aside class="roster-panel" data-testid="roster-panel" class:mobile-open={isMobileOpen}>
   <div class="roster-header">
     <div class="roster-brand">
-      <span class="roster-logo">📦</span>
+      <BrandIcon size={22} />
       <span class="roster-brand-title">PeerBox</span>
     </div>
 
@@ -231,10 +232,6 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-  }
-
-  .roster-logo {
-    font-size: 1.25rem;
   }
 
   .roster-brand-title {

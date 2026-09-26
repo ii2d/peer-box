@@ -1,4 +1,6 @@
 <script lang="ts">
+  import BrandIcon from '../ui/BrandIcon.svelte';
+
   interface Props {
     roomName?: string;
     roomKey?: string;
@@ -28,7 +30,7 @@
   <header class="docs-header">
     <div class="docs-header-inner">
       <a href="/" class="docs-brand">
-        <span class="docs-brand-icon">📦</span>
+        <BrandIcon size={24} />
         <span>PeerBox</span>
       </a>
       <nav class="docs-nav-links" aria-label="Main Navigation">
@@ -61,7 +63,7 @@
     <div class="portal-hero">
       <div class="hero-brand">
         <div class="logo-badge">
-          <span class="logo-icon">📦</span>
+          <BrandIcon size={18} />
           <span class="logo-text">Peer-to-Peer</span>
         </div>
         <h1 class="title">PeerBox</h1>
@@ -210,10 +212,6 @@
     border: 1px solid var(--badge-border);
     border-radius: 9999px;
     margin-bottom: 0.85rem;
-  }
-
-  .logo-icon {
-    font-size: 1rem;
   }
 
   .logo-text {

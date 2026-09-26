@@ -89,7 +89,28 @@ body {
 }
 
 .docs-brand-icon {
-  font-size: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.docs-brand-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 2px 8px rgba(99, 102, 241, 0.25));
+  transition:
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.25s ease;
+}
+
+.docs-brand:hover .docs-brand-icon svg {
+  transform: scale(1.08) translateY(-0.5px);
+  filter: drop-shadow(0 3px 12px rgba(56, 189, 248, 0.45));
 }
 
 .docs-nav-links {

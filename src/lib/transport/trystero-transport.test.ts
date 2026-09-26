@@ -144,10 +144,7 @@ describe('TrysteroTransport Adapter', () => {
       leave: vi.fn(),
     };
 
-    const joinRoomFn = vi
-      .fn()
-      .mockReturnValueOnce(mockRoom1)
-      .mockReturnValueOnce(mockRoom2);
+    const joinRoomFn = vi.fn().mockReturnValueOnce(mockRoom1).mockReturnValueOnce(mockRoom2);
 
     const transport = new TrysteroTransport({
       joinRoomFn,
@@ -155,10 +152,7 @@ describe('TrysteroTransport Adapter', () => {
     });
 
     await transport.joinRoom({ roomId: 'test-room', roomKey: 'key-1' });
-    expect(joinRoomFn).toHaveBeenCalledWith(
-      { appId: 'test-app', password: 'key-1' },
-      'test-room',
-    );
+    expect(joinRoomFn).toHaveBeenCalledWith({ appId: 'test-app', password: 'key-1' }, 'test-room');
 
     // Now change key
     await transport.joinRoom({ roomId: 'test-room', roomKey: 'key-2' });

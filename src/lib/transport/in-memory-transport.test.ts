@@ -103,4 +103,3 @@ describe('InMemoryTransport Seam', () => {
     expect(joiner.getPeers().map((p) => p.id)).toContain('host');
   });
 });
-

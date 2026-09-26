@@ -41,9 +41,13 @@ describe('PortalView Component', () => {
     const appLink = target.querySelector<HTMLAnchorElement>('.docs-nav-links a[href="/"]');
     const aboutLink = target.querySelector<HTMLAnchorElement>('a[href="/about/"]');
     const faqLink = target.querySelector<HTMLAnchorElement>('a[href="/faq/"]');
-    const privacyLink = target.querySelector<HTMLAnchorElement>('.docs-nav-links a[href="/privacy/"]');
+    const privacyLink = target.querySelector<HTMLAnchorElement>(
+      '.docs-nav-links a[href="/privacy/"]',
+    );
     const githubLink = target.querySelector<HTMLAnchorElement>('a[href*="github.com"]');
-    const headerInstantBtn = target.querySelector<HTMLButtonElement>('[data-testid="header-instant-btn"]');
+    const headerInstantBtn = target.querySelector<HTMLButtonElement>(
+      '[data-testid="header-instant-btn"]',
+    );
 
     expect(appLink).not.toBeNull();
     expect(aboutLink).not.toBeNull();

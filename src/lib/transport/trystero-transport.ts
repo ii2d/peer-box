@@ -169,10 +169,7 @@ export class TrysteroTransport implements RoomTransport {
       try {
         const leaveResult = roomToLeave.leave();
         if (leaveResult && typeof (leaveResult as Promise<void>).then === 'function') {
-          await Promise.race([
-            leaveResult,
-            new Promise((resolve) => setTimeout(resolve, 150)),
-          ]);
+          await Promise.race([leaveResult, new Promise((resolve) => setTimeout(resolve, 150))]);
         }
       } catch {
         // Safe cleanup

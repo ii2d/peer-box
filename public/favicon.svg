@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <!-- Top Face Gradient -->
+    <linearGradient id="favTop" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+
+    <!-- Left Face Gradient -->
+    <linearGradient id="favLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+
+    <!-- Right Face Gradient -->
+    <linearGradient id="favRight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <style>
+      .contour {
+        stroke: rgba(15, 23, 42, 0.4);
+        stroke-width: 0.75;
+      }
+      .node-core {
+        fill: #ffffff;
+      }
+      @media (prefers-color-scheme: light) {
+        .contour {
+          stroke: #0f172a;
+          stroke-width: 1.1;
+        }
+      }
+    </style>
+  </defs>
+
+  <!-- Ambient Glow -->
+  <circle cx="16" cy="16.5" r="11" fill="#6366f1" opacity="0.25"/>
+
+  <!-- Left Face -->
+  <polygon points="5,10.5 16,16.5 16,28 5,22" fill="url(#favLeft)" class="contour"/>
+
+  <!-- Right Face -->
+  <polygon points="16,16.5 27,10.5 27,22 16,28" fill="url(#favRight)" class="contour"/>
+
+  <!-- Top Face -->
+  <polygon points="16,5 27,10.5 16,16.5 5,10.5" fill="url(#favTop)" class="contour"/>
+
+  <!-- Core Crease Lines -->
+  <polyline points="5,10.5 16,16.5 27,10.5" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-opacity="0.7" stroke-linejoin="round"/>
+  <line x1="16" y1="16.5" x2="16" y2="28" stroke="#ffffff" stroke-width="0.75" stroke-opacity="0.5"/>
+
+  <!-- Vertex Nodes -->
+  <!-- Top -->
+  <circle cx="16" cy="5" r="1.8" fill="#38bdf8"/>
+  <circle cx="16" cy="5" r="0.9" class="node-core"/>
+
+  <!-- Left-Top -->
+  <circle cx="5" cy="10.5" r="1.6" fill="#818cf8"/>
+  <circle cx="5" cy="10.5" r="0.8" class="node-core"/>
+
+  <!-- Right-Top -->
+  <circle cx="27" cy="10.5" r="1.6" fill="#38bdf8"/>
+  <circle cx="27" cy="10.5" r="0.8" class="node-core"/>
+
+  <!-- Bottom-Left -->
+  <circle cx="5" cy="22" r="1.5" fill="#6366f1"/>
+  <circle cx="5" cy="22" r="0.7" class="node-core"/>
+
+  <!-- Bottom-Right -->
+  <circle cx="27" cy="22" r="1.5" fill="#0284c7"/>
+  <circle cx="27" cy="22" r="0.7" class="node-core"/>
+
+  <!-- Bottom-Center -->
+  <circle cx="16" cy="28" r="1.6" fill="#818cf8"/>
+  <circle cx="16" cy="28" r="0.8" class="node-core"/>
+
+  <!-- Center Hub Node -->
+  <circle cx="16" cy="16.5" r="2.4" fill="#0284c7"/>
+  <circle cx="16" cy="16.5" r="1.2" class="node-core"/>
+</svg>
