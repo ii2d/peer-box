@@ -63,12 +63,13 @@ export async function submitIndexNow(fetchFn = globalThis.fetch, key = INDEXNOW_
 // Auto-run if executed directly via node
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
 if (isMain) {
-  if (!INDEXNOW_KEY) {
+  const key = process.env.INDEXNOW_KEY || process.argv[2] || '';
+  if (!key) {
     console.log('[IndexNow] No INDEXNOW_KEY provided. Skipping IndexNow announcement.');
     process.exit(0);
   }
 
-  submitIndexNow().then((result) => {
+  submitIndexNow(globalThis.fetch, key).then((result) => {
     if (!result.success) {
       // Do not fail CI if IndexNow API is temporarily offline
       console.warn('[IndexNow] Notice: Ping completed with non-fatal status.');

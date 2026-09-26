@@ -1,0 +1,28 @@
+name: Submit IndexNow
+
+on:
+  workflow_dispatch:
+    inputs:
+      key:
+        description: 'IndexNow API Key (optional: falls back to repository secret or variable)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  indexnow:
+    name: Announce URLs to IndexNow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Announce update via IndexNow
+        env:
+          INDEXNOW_KEY: ${{ inputs.key || secrets.INDEXNOW_KEY || vars.INDEXNOW_KEY }}
+        run: node scripts/submit-indexnow.mjs
