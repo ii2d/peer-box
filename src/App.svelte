@@ -359,6 +359,44 @@
     }
   }
 
+  // 2-Column Workspace & Mobile Drawer State
+  let isRoomLinkCopied = $state(false);
+  let roomLinkCopyTimeout: ReturnType<typeof setTimeout> | null = null;
+  let isMobileRosterOpen = $state(false);
+
+  function toggleMobileRoster() {
+    isMobileRosterOpen = !isMobileRosterOpen;
+  }
+
+  function closeMobileRoster() {
+    isMobileRosterOpen = false;
+  }
+
+  function selectRecipient(peerId: string) {
+    selectedRecipientId = peerId;
+    closeMobileRoster();
+  }
+
+  async function copyRoomLink() {
+    if (!currentRoomId || typeof window === 'undefined') return;
+    const baseUrl = window.location.origin;
+    const path = buildRoomUrl(currentRoomId, {
+      roomKey: currentRoomKey,
+      includeKey: !!currentRoomKey,
+    });
+    const shareUrl = `${baseUrl}${path}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      isRoomLinkCopied = true;
+      if (roomLinkCopyTimeout) clearTimeout(roomLinkCopyTimeout);
+      roomLinkCopyTimeout = setTimeout(() => {
+        isRoomLinkCopied = false;
+      }, 2000);
+    } catch {
+      // Fallback
+    }
+  }
+
   function startEditingNickname() {
     editNicknameValue = localPersona.name;
     isEditingNickname = true;
@@ -622,7 +660,7 @@
   }
 </script>
 
-<main class="container">
+<main class="app-main" class:in-room={!!currentRoomId}>
   {#if !currentRoomId}
     <PortalView
       bind:roomName={inputRoomName}
@@ -633,23 +671,62 @@
       onCreateInstant={handleCreateInstantRoom}
     />
   {:else}
-    <div class="card room-card" data-testid="room-view">
-      <div class="room-header">
-        <div class="room-meta">
-          <div class="room-info">
-            <div class="room-tag-row">
-              <span class="room-tag">Room</span>
-              {#if currentRoomKey}
-                <span class="badge badge-encrypted">🔒 Protected</span>
-              {:else}
-                <span class="badge badge-open">🌐 Open</span>
-              {/if}
+    <div class="room-workspace" data-testid="room-view">
+      <!-- Mobile Roster Backdrop -->
+      {#if isMobileRosterOpen}
+        <button
+          type="button"
+          class="roster-backdrop"
+          data-testid="roster-backdrop"
+          onclick={closeMobileRoster}
+          aria-label="Close roster menu"
+        ></button>
+      {/if}
+
+      <!-- Left 2-Column Roster Panel -->
+      <aside class="roster-panel" data-testid="roster-panel" class:mobile-open={isMobileRosterOpen}>
+        <div class="roster-header">
+          <div class="roster-brand">
+            <span class="roster-logo">📦</span>
+            <span class="roster-brand-title">PeerBox</span>
+          </div>
+
+          <div class="roster-room-info">
+            <div class="roster-room-meta">
+              <span class="roster-room-label">ROOM</span>
+              <span class="roster-room-name" data-testid="roster-room-name">{currentRoomId}</span>
             </div>
-            <h2 class="room-title" data-testid="current-room-name">{currentRoomId}</h2>
+            <button
+              type="button"
+              class="btn-copy-link"
+              data-testid="roster-copy-link-btn"
+              onclick={copyRoomLink}
+              title="Copy 1-click room link"
+            >
+              {isRoomLinkCopied ? '✓ Copied' : '📋 Copy Link'}
+            </button>
+          </div>
+
+          <div class="roster-key-status">
+            {#if currentRoomKey}
+              <span class="badge badge-encrypted">🔒 Protected</span>
+            {:else}
+              <span class="badge badge-open">🌐 Open</span>
+            {/if}
+            <button
+              type="button"
+              class="btn-change-key"
+              data-testid="change-key-btn"
+              onclick={openChangeKeyModal}
+              title="Change Room Key"
+            >
+              Key Settings
+            </button>
           </div>
         </div>
 
-        <div class="header-actions">
+        <!-- Persona Section -->
+        <div class="roster-persona-section">
           <button
             type="button"
             class="persona-badge"
@@ -660,33 +737,79 @@
             <span class="persona-avatar" style:background-color={localPersona.color}>
               {localPersona.emoji}
             </span>
-            <span class="persona-name">{localPersona.name}</span>
+            <div class="persona-info">
+              <span class="persona-name">{localPersona.name}</span>
+              <span class="persona-role">You (Click to edit)</span>
+            </div>
             <span class="persona-edit-icon">✏️</span>
           </button>
+        </div>
 
+        <!-- Connected Peers Presence List -->
+        <div class="roster-peers-section" data-testid="presence-bar">
+          <div class="roster-section-header">
+            <span class="roster-section-title">Connected Peers</span>
+            <span class="presence-count">{connectedPeers.length + 1}</span>
+          </div>
+
+          <div class="roster-peers-list">
+            <!-- Everyone (Broadcast target) -->
+            <button
+              type="button"
+              class="roster-peer-row roster-broadcast-row"
+              class:selected={selectedRecipientId === 'everyone'}
+              onclick={() => selectRecipient('everyone')}
+              title="Broadcast message to everyone in the room"
+            >
+              <div class="roster-peer-info">
+                <span class="peer-dot peer-dot-everyone">🌐</span>
+                <span class="peer-name">Everyone</span>
+              </div>
+              {#if selectedRecipientId === 'everyone'}
+                <span class="whisper-tag">Active</span>
+              {/if}
+            </button>
+
+            <!-- Remote Connected Peers -->
+            {#each connectedPeers as peer (peer.id)}
+              <div
+                class="roster-peer-row"
+                data-testid="peer-item"
+                class:selected={selectedRecipientId === peer.id}
+              >
+                <button
+                  type="button"
+                  class="roster-peer-btn"
+                  onclick={() => selectRecipient(peer.id)}
+                  title={`Direct whisper to ${peer.name || peer.id}`}
+                >
+                  <span class="peer-dot" style:background-color={peer.color || 'var(--primary)'}
+                  ></span>
+                  <span class="peer-name">{peer.name || peer.id}</span>
+                  {#if selectedRecipientId === peer.id}
+                    <span class="whisper-tag">Whisper</span>
+                  {/if}
+                </button>
+                <ConnectionBadge
+                  stats={peerStats[peer.id]}
+                  onClick={() => openDiagnostics(peer.id)}
+                />
+              </div>
+            {/each}
+
+            {#if connectedPeers.length === 0}
+              <div class="roster-alone-hint">
+                <span>Waiting for peers to join...</span>
+              </div>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Roster Footer Actions -->
+        <div class="roster-footer">
           <button
             type="button"
-            class="btn-secondary btn-trust"
-            data-testid="trust-guarantee-btn"
-            onclick={() => (isTrustModalOpen = true)}
-            title="View PeerBox Trust Guarantee & Privacy Assurances"
-          >
-            🛡️ Private & Ephemeral
-          </button>
-
-          <button
-            type="button"
-            class="btn-secondary btn-share"
-            data-testid="share-room-btn"
-            onclick={() => (isShareModalOpen = true)}
-            title="Share room link or QR code"
-          >
-            🔗 Share
-          </button>
-
-          <button
-            type="button"
-            class="btn-secondary btn-icon-persist"
+            class="btn-secondary btn-persist"
             data-testid="persist-toggle-btn"
             onclick={togglePersistence}
             title={isPersisted
@@ -701,11 +824,283 @@
             class="btn-secondary btn-leave"
             data-testid="leave-btn"
             onclick={() => leave(true)}
+            title="Leave this room and return to portal"
           >
-            Leave
+            🚪 Leave Room
           </button>
         </div>
-      </div>
+      </aside>
+
+      <!-- Right Main Workspace Panel -->
+      <section class="workspace-main" data-testid="workspace-main">
+        <!-- Workspace Top Header -->
+        <header class="workspace-header">
+          <div class="workspace-header-left">
+            <button
+              type="button"
+              class="btn-roster-toggle"
+              data-testid="roster-toggle-btn"
+              onclick={toggleMobileRoster}
+              aria-label="Toggle peers roster"
+            >
+              👥 Peers ({connectedPeers.length + 1})
+            </button>
+
+            <div class="workspace-room-heading">
+              <h2 class="workspace-room-title" data-testid="current-room-name">{currentRoomId}</h2>
+            </div>
+
+            <!-- Recipient Indicator -->
+            <div class="workspace-recipient-badge">
+              {#if selectedRecipientId !== 'everyone'}
+                {@const targetPeer = connectedPeers.find((p) => p.id === selectedRecipientId)}
+                <div class="recipient-indicator" data-testid="recipient-indicator">
+                  <span class="indicator-icon">🔒</span>
+                  <span
+                    >Whispering to <strong>{targetPeer?.name || selectedRecipientId}</strong></span
+                  >
+                  <button
+                    type="button"
+                    class="btn-reset-recipient"
+                    data-testid="reset-recipient-btn"
+                    onclick={() => selectRecipient('everyone')}
+                    title="Switch to Everyone"
+                  >
+                    ✕
+                  </button>
+                </div>
+              {:else}
+                <div class="recipient-indicator indicator-everyone">
+                  <span class="indicator-icon">🌐</span>
+                  <span>Talking to <strong>Everyone</strong></span>
+                </div>
+              {/if}
+            </div>
+          </div>
+
+          <div class="workspace-header-actions">
+            <button
+              type="button"
+              class="btn-secondary btn-trust"
+              data-testid="trust-guarantee-btn"
+              onclick={() => (isTrustModalOpen = true)}
+              title="View PeerBox Trust Guarantee & Privacy Assurances"
+            >
+              🛡️ Private & Ephemeral
+            </button>
+
+            <button
+              type="button"
+              class="btn-secondary btn-share"
+              data-testid="share-room-btn"
+              onclick={() => (isShareModalOpen = true)}
+              title="Share room link or QR code"
+            >
+              🔗 Share
+            </button>
+          </div>
+        </header>
+
+        <!-- Diagnostic Banners -->
+        <div class="workspace-banners">
+          {#if isAloneDiagnosticVisible}
+            <div class="diagnostic-banner" data-testid="alone-diagnostic">
+              <div class="diagnostic-content">
+                <span class="diagnostic-icon">ℹ️</span>
+                <div>
+                  <strong>Waiting for peers to join...</strong>
+                  <p>
+                    If this room is protected, ensure other peers have the exact matching Room Key.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                data-testid="change-key-btn"
+                onclick={openChangeKeyModal}
+              >
+                Change Room Key
+              </button>
+            </div>
+          {/if}
+
+          {#if hasFailedConnection}
+            <div class="nat-diagnostic-banner" data-testid="nat-diagnostic-banner">
+              <div class="nat-diagnostic-content">
+                <span class="nat-icon">⚠️</span>
+                <div class="nat-text">
+                  <strong>Direct Connection Failed (Symmetric NAT Firewall)</strong>
+                  <p>
+                    PeerBox operates with zero TURN relay servers (ADR-0001). A strict symmetric NAT
+                    or firewall is preventing direct peer-to-peer data channels between these
+                    networks.
+                  </p>
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Chat & Transfer Timeline with Centered 900px Container -->
+        <div class="chat-timeline" bind:this={messagesContainer} data-testid="chat-timeline">
+          <div class="timeline-inner">
+            {#if timelineItems.length === 0}
+              <div class="empty-timeline">
+                <p class="empty-title">Room conversation started</p>
+                <p class="empty-subtitle">
+                  Messages and files sent here are end-to-end encrypted directly between peers.
+                </p>
+              </div>
+            {:else}
+              {#each timelineItems as item (item.id)}
+                {#if item.type === 'chat'}
+                  {@const isSelf = item.message.senderId === transport.localPeerId}
+                  <div
+                    class="message-wrapper"
+                    class:message-self={isSelf}
+                    data-testid="message-item"
+                  >
+                    <div class="message-meta">
+                      {#if !isSelf}
+                        <span
+                          class="sender-avatar"
+                          style:background-color={item.message.senderColor}
+                        >
+                          {item.message.senderEmoji}
+                        </span>
+                        <span class="sender-name">{item.message.senderName}</span>
+                      {/if}
+                      <span class="message-time">{formatTimestamp(item.message.timestamp)}</span>
+                      {#if item.message.isPrivate}
+                        <span class="badge badge-private">
+                          🔒 Private {isSelf && item.message.recipientName
+                            ? `to ${item.message.recipientName}`
+                            : ''}
+                        </span>
+                      {/if}
+                    </div>
+
+                    <div class="message-bubble" class:bubble-self={isSelf}>
+                      <p class="message-text">{item.message.content}</p>
+                    </div>
+                  </div>
+                {:else if item.type === 'transfer'}
+                  {@const isSelf = item.transfer.meta.senderId === transport.localPeerId}
+                  <TransferMessage
+                    transfer={item.transfer}
+                    {isSelf}
+                    onOpenImage={openLightbox}
+                    onAccept={handleAcceptTransfer}
+                    onDecline={handleDeclineTransfer}
+                    onCancel={handleCancelTransfer}
+                    onExport={handleExportTransfer}
+                  />
+                {/if}
+              {/each}
+            {/if}
+          </div>
+        </div>
+
+        {#if transferError}
+          <div class="transfer-error-toast" data-testid="transfer-error">
+            ⚠️ {transferError}
+          </div>
+        {/if}
+
+        {#if screenGrabError}
+          <div class="transfer-error-toast" data-testid="screengrab-error">
+            ⚠️ {screenGrabError}
+          </div>
+        {/if}
+
+        {#if activeScreenGrab}
+          <ScreenGrabPreviewTray
+            file={activeScreenGrab.file}
+            previewUrl={activeScreenGrab.previewUrl}
+            peers={connectedPeers}
+            initialRecipientId={selectedRecipientId}
+            onSend={handleSendScreenGrab}
+            onCancel={handleCancelScreenGrab}
+          />
+        {/if}
+
+        <!-- Pinned Composer with Centered 900px Container -->
+        <footer class="composer-container">
+          <div class="composer-inner">
+            <div class="composer-toolbar">
+              <div class="composer-toolbar-left">
+                <div class="recipient-selector-wrapper">
+                  <span class="recipient-label">Send to:</span>
+                  <select
+                    class="recipient-select"
+                    data-testid="recipient-select"
+                    bind:value={selectedRecipientId}
+                  >
+                    <option value="everyone">🌐 Everyone</option>
+                    {#each connectedPeers as peer (peer.id)}
+                      <option value={peer.id}>
+                        🔒 {peer.name || peer.id}
+                      </option>
+                    {/each}
+                  </select>
+                </div>
+
+                <label class="btn-attach" title="Attach file (<25MB)" data-testid="attach-file-btn">
+                  <span class="attach-icon">📎</span>
+                  <span class="attach-text">Attach</span>
+                  <input
+                    type="file"
+                    multiple
+                    class="hidden-file-input"
+                    data-testid="file-input"
+                    onchange={handleFileInputChange}
+                  />
+                </label>
+
+                <VoiceNoteRecorder
+                  recipientName={selectedRecipientId === 'everyone'
+                    ? 'Everyone'
+                    : connectedPeers.find((p) => p.id === selectedRecipientId)?.name ||
+                      'Selected Peer'}
+                  onSend={handleSendVoiceNote}
+                />
+
+                <button
+                  type="button"
+                  class="btn-screengrab"
+                  data-testid="screengrab-btn"
+                  title="Capture Screen Grab"
+                  onclick={handleCaptureScreenGrab}
+                >
+                  <span class="screengrab-icon">📸</span>
+                  <span class="screengrab-text">Screen Grab</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="composer-input-row">
+              <textarea
+                class="composer-textarea"
+                data-testid="message-input"
+                placeholder="Type a message... (Press Enter to send, Shift+Enter for new line)"
+                rows="1"
+                bind:value={chatInput}
+                onkeydown={handleChatKeydown}></textarea>
+
+              <button
+                type="button"
+                class="btn-primary btn-send"
+                data-testid="send-btn"
+                onclick={handleSendMessage}
+                disabled={!chatInput.trim()}
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        </footer>
+      </section>
 
       <!-- Nickname Edit Modal / Popover -->
       {#if isEditingNickname}
@@ -773,217 +1168,6 @@
         </div>
       {/if}
 
-      <!-- Alone / Mismatch Diagnostic Banner -->
-      {#if isAloneDiagnosticVisible}
-        <div class="diagnostic-banner" data-testid="alone-diagnostic">
-          <div class="diagnostic-content">
-            <span class="diagnostic-icon">ℹ️</span>
-            <div>
-              <strong>Waiting for peers to join...</strong>
-              <p>If this room is protected, ensure other peers have the exact matching Room Key.</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            class="btn-secondary btn-sm"
-            data-testid="change-key-btn"
-            onclick={openChangeKeyModal}
-          >
-            Change Room Key
-          </button>
-        </div>
-      {/if}
-
-      <!-- In-Room Peer List Bar -->
-      <div class="presence-bar" data-testid="presence-bar">
-        <span class="presence-count">
-          Peers ({connectedPeers.length + 1})
-        </span>
-
-        <div class="peers-list">
-          <!-- Self -->
-          <div class="peer-pill peer-self" title="You">
-            <span class="peer-dot" style:background-color={localPersona.color}></span>
-            <span class="peer-name">{localPersona.name} (You)</span>
-          </div>
-
-          <!-- Connected Peers -->
-          {#each connectedPeers as peer (peer.id)}
-            <div class="peer-pill" data-testid="peer-item">
-              <span class="peer-dot" style:background-color={peer.color || 'var(--primary)'}></span>
-              <span class="peer-name">{peer.name || peer.id}</span>
-              <ConnectionBadge
-                stats={peerStats[peer.id]}
-                onClick={() => openDiagnostics(peer.id)}
-              />
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      <!-- Symmetric NAT Direct Connection Failed Banner -->
-      {#if hasFailedConnection}
-        <div class="nat-diagnostic-banner" data-testid="nat-diagnostic-banner">
-          <div class="nat-diagnostic-content">
-            <span class="nat-icon">⚠️</span>
-            <div class="nat-text">
-              <strong>Direct Connection Failed (Symmetric NAT Firewall)</strong>
-              <p>
-                PeerBox operates with zero TURN relay servers (ADR-0001). A strict symmetric NAT or
-                firewall is preventing direct peer-to-peer data channels between these networks.
-              </p>
-            </div>
-          </div>
-        </div>
-      {/if}
-
-      <!-- Chat & Transfer Timeline -->
-      <div class="chat-timeline" bind:this={messagesContainer} data-testid="chat-timeline">
-        {#if timelineItems.length === 0}
-          <div class="empty-timeline">
-            <p class="empty-title">Room conversation started</p>
-            <p class="empty-subtitle">
-              Messages and files sent here are end-to-end encrypted directly between peers.
-            </p>
-          </div>
-        {:else}
-          {#each timelineItems as item (item.id)}
-            {#if item.type === 'chat'}
-              {@const isSelf = item.message.senderId === transport.localPeerId}
-              <div class="message-wrapper" class:message-self={isSelf} data-testid="message-item">
-                <div class="message-meta">
-                  {#if !isSelf}
-                    <span class="sender-avatar" style:background-color={item.message.senderColor}>
-                      {item.message.senderEmoji}
-                    </span>
-                    <span class="sender-name">{item.message.senderName}</span>
-                  {/if}
-                  <span class="message-time">{formatTimestamp(item.message.timestamp)}</span>
-                  {#if item.message.isPrivate}
-                    <span class="badge badge-private">
-                      🔒 Private {isSelf && item.message.recipientName
-                        ? `to ${item.message.recipientName}`
-                        : ''}
-                    </span>
-                  {/if}
-                </div>
-
-                <div class="message-bubble" class:bubble-self={isSelf}>
-                  <p class="message-text">{item.message.content}</p>
-                </div>
-              </div>
-            {:else if item.type === 'transfer'}
-              {@const isSelf = item.transfer.meta.senderId === transport.localPeerId}
-              <TransferMessage
-                transfer={item.transfer}
-                {isSelf}
-                onOpenImage={openLightbox}
-                onAccept={handleAcceptTransfer}
-                onDecline={handleDeclineTransfer}
-                onCancel={handleCancelTransfer}
-                onExport={handleExportTransfer}
-              />
-            {/if}
-          {/each}
-        {/if}
-      </div>
-
-      {#if transferError}
-        <div class="transfer-error-toast" data-testid="transfer-error">
-          ⚠️ {transferError}
-        </div>
-      {/if}
-
-      {#if screenGrabError}
-        <div class="transfer-error-toast" data-testid="screengrab-error">
-          ⚠️ {screenGrabError}
-        </div>
-      {/if}
-
-      {#if activeScreenGrab}
-        <ScreenGrabPreviewTray
-          file={activeScreenGrab.file}
-          previewUrl={activeScreenGrab.previewUrl}
-          peers={connectedPeers}
-          initialRecipientId={selectedRecipientId}
-          onSend={handleSendScreenGrab}
-          onCancel={handleCancelScreenGrab}
-        />
-      {/if}
-
-      <!-- Composer & Recipient Selector -->
-      <div class="composer-container">
-        <div class="composer-toolbar">
-          <div class="composer-toolbar-left">
-            <div class="recipient-selector-wrapper">
-              <span class="recipient-label">Send to:</span>
-              <select
-                class="recipient-select"
-                data-testid="recipient-select"
-                bind:value={selectedRecipientId}
-              >
-                <option value="everyone">🌐 Everyone</option>
-                {#each connectedPeers as peer (peer.id)}
-                  <option value={peer.id}>
-                    🔒 {peer.name || peer.id}
-                  </option>
-                {/each}
-              </select>
-            </div>
-
-            <label class="btn-attach" title="Attach file (<25MB)" data-testid="attach-file-btn">
-              <span class="attach-icon">📎</span>
-              <span class="attach-text">Attach</span>
-              <input
-                type="file"
-                multiple
-                class="hidden-file-input"
-                data-testid="file-input"
-                onchange={handleFileInputChange}
-              />
-            </label>
-
-            <VoiceNoteRecorder
-              recipientName={selectedRecipientId === 'everyone'
-                ? 'Everyone'
-                : connectedPeers.find((p) => p.id === selectedRecipientId)?.name || 'Selected Peer'}
-              onSend={handleSendVoiceNote}
-            />
-
-            <button
-              type="button"
-              class="btn-screengrab"
-              data-testid="screengrab-btn"
-              title="Capture Screen Grab"
-              onclick={handleCaptureScreenGrab}
-            >
-              <span class="screengrab-icon">📸</span>
-              <span class="screengrab-text">Screen Grab</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="composer-input-row">
-          <textarea
-            class="composer-textarea"
-            data-testid="message-input"
-            placeholder="Type a message... (Press Enter to send, Shift+Enter for new line)"
-            rows="1"
-            bind:value={chatInput}
-            onkeydown={handleChatKeydown}></textarea>
-
-          <button
-            type="button"
-            class="btn-primary btn-send"
-            data-testid="send-btn"
-            onclick={handleSendMessage}
-            disabled={!chatInput.trim()}
-          >
-            Send
-          </button>
-        </div>
-      </div>
-
       <!-- Drag & Drop Fullscreen Overlay -->
       {#if isDraggingOver}
         <div class="drag-overlay" data-testid="drag-overlay">
@@ -1047,185 +1231,163 @@
 </main>
 
 <style>
-  .container {
+  .app-main {
     width: 100%;
-    display: flex;
-    justify-content: center;
-  }
-
-  .card {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    backdrop-filter: blur(20px);
-    border-radius: 1.25rem;
-    padding: 2.25rem;
-    width: 100%;
-    box-shadow:
-      0 20px 25px -5px rgba(0, 0, 0, 0.45),
-      0 8px 10px -6px rgba(0, 0, 0, 0.35);
-  }
-
-  .room-card {
-    padding: 1.75rem;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    min-height: 580px;
   }
 
-  input[type='text'],
-  input[type='password'],
-  .composer-textarea {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid var(--card-border);
-    border-radius: 0.625rem;
-    color: var(--text-main);
-    font-size: 0.9375rem;
-    font-family: inherit;
-    transition: all 0.15s ease;
+  .app-main.in-room {
+    height: 100dvh;
+    overflow: hidden;
   }
 
-  input:focus,
-  .composer-textarea:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-  }
-
-  .btn-primary {
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 0.9375rem;
-    font-weight: 600;
-    padding: 0.8125rem 1.5rem;
-    border-radius: 0.625rem;
-    border: none;
-    background-color: var(--primary);
-    color: #ffffff;
-    box-shadow: 0 4px 14px 0 var(--primary-glow);
-    transition: all 0.2s ease;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background-color: var(--primary-hover);
-    transform: translateY(-1px);
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn-secondary {
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 0.875rem;
-    font-weight: 600;
-    padding: 0.625rem 1rem;
-    border-radius: 0.625rem;
-    border: 1px solid var(--card-border);
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--text-main);
-    transition: all 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.15);
-  }
-
-  .btn-sm {
-    font-size: 0.75rem;
-    padding: 0.4rem 0.75rem;
-  }
-
-  .btn-icon-persist {
-    font-size: 0.75rem;
-    padding: 0.35rem 0.75rem;
-  }
-
-  .room-header {
+  .room-workspace {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: row;
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Left Roster Panel (Desktop 2-column) */
+  .roster-panel {
+    width: 280px;
+    min-width: 280px;
+    max-width: 280px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-right: 1px solid var(--card-border);
+    z-index: 20;
+    flex-shrink: 0;
+  }
+
+  .roster-header {
+    padding: 1.25rem 1rem 1rem 1rem;
     border-bottom: 1px solid var(--card-border);
-    padding-bottom: 1rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .room-meta {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 0.75rem;
   }
 
-  .room-tag-row {
+  .roster-brand {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 0.2rem;
   }
 
-  .room-tag {
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-muted);
-    font-weight: 700;
-  }
-
-  .room-title {
+  .roster-logo {
     font-size: 1.25rem;
-    font-weight: 700;
   }
 
-  .badge {
+  .roster-brand-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+  }
+
+  .roster-room-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--card-border);
+    border-radius: 0.625rem;
+    padding: 0.45rem 0.65rem;
+  }
+
+  .roster-room-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .roster-room-label {
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .roster-room-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+  }
+
+  .btn-copy-link {
     font-size: 0.6875rem;
     font-weight: 600;
-    padding: 0.15rem 0.45rem;
-    border-radius: 9999px;
+    padding: 0.25rem 0.5rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--card-border);
+    border-radius: 0.375rem;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    font-family: inherit;
   }
 
-  .badge-encrypted {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
-    border: 1px solid rgba(34, 197, 94, 0.3);
+  .btn-copy-link:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.25);
   }
 
-  .badge-open {
-    background: rgba(148, 163, 184, 0.15);
-    color: #cbd5e1;
-    border: 1px solid rgba(148, 163, 184, 0.3);
-  }
-
-  .badge-private {
-    background: rgba(236, 72, 153, 0.15);
-    color: #f472b6;
-    border: 1px solid rgba(236, 72, 153, 0.3);
-    font-size: 0.625rem;
-    padding: 0.1rem 0.4rem;
-  }
-
-  .header-actions {
+  .roster-key-status {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.5rem;
+  }
+
+  .btn-change-key {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    font-family: inherit;
+    padding: 0.2rem 0;
+  }
+
+  .btn-change-key:hover {
+    color: var(--text-main);
+  }
+
+  /* Roster Persona */
+  .roster-persona-section {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--card-border);
   }
 
   .persona-badge {
+    width: 100%;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0.75rem;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--card-border);
-    border-radius: 9999px;
+    border-radius: 0.75rem;
     color: var(--text-main);
     cursor: pointer;
     transition: all 0.15s ease;
     font-family: inherit;
-    font-size: 0.8125rem;
+    text-align: left;
   }
 
   .persona-badge:hover {
@@ -1234,22 +1396,313 @@
   }
 
   .persona-avatar {
-    width: 1.35rem;
-    height: 1.35rem;
+    width: 2rem;
+    height: 2rem;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    font-size: 0.75rem;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+  }
+
+  .persona-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
   }
 
   .persona-name {
     font-weight: 600;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .persona-role {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
   }
 
   .persona-edit-icon {
     font-size: 0.75rem;
     opacity: 0.6;
+    flex-shrink: 0;
+  }
+
+  /* Roster Peers Presence Section */
+  .roster-peers-section {
+    flex: 1 1 0%;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .roster-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .presence-count {
+    color: var(--primary);
+    font-weight: 700;
+    background: rgba(99, 102, 241, 0.15);
+    padding: 0.1rem 0.4rem;
+    border-radius: 9999px;
+  }
+
+  .roster-peers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .roster-peer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.45rem 0.65rem;
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    gap: 0.5rem;
+  }
+
+  .roster-peer-row:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .roster-peer-row.selected {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: rgba(99, 102, 241, 0.45);
+  }
+
+  .roster-broadcast-row {
+    width: 100%;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    color: var(--text-main);
+  }
+
+  .roster-peer-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .roster-peer-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    flex: 1;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0;
+  }
+
+  .peer-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .peer-dot-everyone {
+    font-size: 0.875rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .peer-name {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .whisper-tag {
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #a5b4fc;
+    background: rgba(99, 102, 241, 0.25);
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .roster-alone-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+    font-style: italic;
+  }
+
+  /* Roster Footer */
+  .roster-footer {
+    padding: 0.875rem 1rem;
+    border-top: 1px solid var(--card-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .btn-persist,
+  .btn-leave {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .btn-leave {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+  }
+
+  .btn-leave:hover {
+    background: rgba(239, 68, 68, 0.22);
+    border-color: rgba(239, 68, 68, 0.45);
+  }
+
+  /* Main Workspace Panel */
+  .workspace-main {
+    flex: 1 1 0%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: rgba(10, 15, 29, 0.5);
+  }
+
+  /* Workspace Header */
+  .workspace-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+    border-bottom: 1px solid var(--card-border);
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    flex-shrink: 0;
+    gap: 1rem;
+  }
+
+  .workspace-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    min-width: 0;
+  }
+
+  .btn-roster-toggle {
+    display: none;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 0.5rem;
+    color: #a5b4fc;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+
+  .workspace-room-heading {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .workspace-room-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .workspace-recipient-badge {
+    display: flex;
+    align-items: center;
+  }
+
+  .recipient-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--card-border);
+    border-radius: 9999px;
+    padding: 0.2rem 0.6rem;
+    white-space: nowrap;
+  }
+
+  .recipient-indicator strong {
+    color: #ffffff;
+  }
+
+  .btn-reset-recipient {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0 0.15rem;
+    font-size: 0.75rem;
+    line-height: 1;
+    font-family: inherit;
+  }
+
+  .btn-reset-recipient:hover {
+    color: #ffffff;
+  }
+
+  .workspace-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  /* Diagnostic Banners */
+  .workspace-banners {
+    padding: 0.75rem 1.5rem 0 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 
   .diagnostic-banner {
@@ -1261,7 +1714,6 @@
     background: rgba(245, 158, 11, 0.12);
     border: 1px solid rgba(245, 158, 11, 0.3);
     border-radius: 0.75rem;
-    margin-bottom: 0.75rem;
     color: #fcd34d;
     font-size: 0.8125rem;
   }
@@ -1283,7 +1735,6 @@
     border: 1px solid rgba(239, 68, 68, 0.35);
     border-radius: 0.75rem;
     padding: 0.75rem 1rem;
-    margin-bottom: 0.75rem;
     color: #fca5a5;
     font-size: 0.8125rem;
   }
@@ -1313,87 +1764,49 @@
     line-height: 1.4;
   }
 
-  .presence-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--card-border);
-    margin-bottom: 1rem;
-    font-size: 0.8125rem;
-  }
-
-  .presence-count {
-    color: var(--text-muted);
-    font-weight: 600;
-  }
-
-  .peers-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-
-  .peer-pill {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.2rem 0.55rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--card-border);
-    border-radius: 9999px;
-  }
-
-  .peer-self {
-    border-color: rgba(99, 102, 241, 0.4);
-    background: rgba(99, 102, 241, 0.08);
-  }
-
-  .peer-dot {
-    width: 0.45rem;
-    height: 0.45rem;
-    border-radius: 50%;
-  }
-
-  .peer-name {
-    font-size: 0.75rem;
-    font-weight: 500;
-  }
-
+  /* Full-Height Scrollable Timeline */
   .chat-timeline {
-    flex: 1;
+    flex: 1 1 0%;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding: 1.25rem 1.5rem;
+    min-height: 0;
+  }
+
+  .timeline-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
-    padding: 0.5rem 0.25rem 1rem 0;
-    min-height: 280px;
-    max-height: 380px;
   }
 
   .empty-timeline {
     margin: auto;
     text-align: center;
-    padding: 2rem 1rem;
+    padding: 4rem 1rem;
   }
 
   .empty-title {
     font-weight: 600;
     color: var(--text-main);
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.35rem;
+    font-size: 1.1rem;
   }
 
   .empty-subtitle {
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     color: var(--text-muted);
-    max-width: 320px;
+    max-width: 400px;
+    margin: 0 auto;
   }
 
   .message-wrapper {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    max-width: 82%;
+    max-width: 80%;
   }
 
   .message-self {
@@ -1445,9 +1858,20 @@
     white-space: pre-wrap;
   }
 
+  /* Pinned Bottom Composer */
   .composer-container {
     border-top: 1px solid var(--card-border);
-    padding-top: 0.85rem;
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 0.75rem 1.5rem calc(0.75rem + env(safe-area-inset-bottom, 0px)) 1.5rem;
+    flex-shrink: 0;
+  }
+
+  .composer-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -1463,6 +1887,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    flex-wrap: wrap;
   }
 
   .recipient-selector-wrapper {
@@ -1522,6 +1947,7 @@
     cursor: pointer;
     transition: all 0.15s;
     user-select: none;
+    font-family: inherit;
   }
 
   .btn-screengrab:hover {
@@ -1533,6 +1959,123 @@
     display: none;
   }
 
+  .composer-input-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  input[type='text'],
+  input[type='password'],
+  .composer-textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--card-border);
+    border-radius: 0.625rem;
+    color: var(--text-main);
+    font-size: 0.9375rem;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+
+  input:focus,
+  .composer-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  }
+
+  .composer-textarea {
+    resize: none;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.875rem;
+    height: 44px;
+    max-height: 120px;
+  }
+
+  .btn-primary {
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.625rem;
+    border: none;
+    background-color: var(--primary);
+    color: #ffffff;
+    box-shadow: 0 4px 14px 0 var(--primary-glow);
+    transition: all 0.2s ease;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-send {
+    padding: 0 1.25rem;
+    font-size: 0.875rem;
+    height: 44px;
+  }
+
+  .btn-secondary {
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0.5rem 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--card-border);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .btn-sm {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.65rem;
+  }
+
+  .badge {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+  }
+
+  .badge-encrypted {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+
+  .badge-open {
+    background: rgba(148, 163, 184, 0.15);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+  }
+
+  .badge-private {
+    background: rgba(236, 72, 153, 0.15);
+    color: #f472b6;
+    border: 1px solid rgba(236, 72, 153, 0.3);
+    font-size: 0.625rem;
+    padding: 0.1rem 0.4rem;
+  }
+
   .transfer-error-toast {
     background: rgba(239, 68, 68, 0.15);
     border: 1px solid rgba(239, 68, 68, 0.4);
@@ -1540,8 +2083,54 @@
     padding: 0.5rem 0.85rem;
     border-radius: 0.5rem;
     font-size: 0.8125rem;
-    margin-bottom: 0.5rem;
+    margin: 0.5rem 1.5rem 0 1.5rem;
     animation: fadeIn 0.2s;
+  }
+
+  /* Modals & Overlays */
+  .edit-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 1.5rem;
+  }
+
+  .edit-modal {
+    background: #1e293b;
+    border: 1px solid var(--card-border);
+    border-radius: 1rem;
+    padding: 1.75rem;
+    max-width: 400px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .edit-modal h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+
+  .modal-hint {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  .modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
   }
 
   .drag-overlay {
@@ -1600,66 +2189,58 @@
     }
   }
 
-  .composer-input-row {
-    display: flex;
-    gap: 0.5rem;
-  }
+  /* Responsive Mobile Breakpoint (<768px) */
+  @media (max-width: 767px) {
+    .roster-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 280px;
+      max-width: 82vw;
+      z-index: 100;
+      transform: translateX(-100%);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
 
-  .composer-textarea {
-    resize: none;
-    padding: 0.65rem 0.85rem;
-    font-size: 0.875rem;
-    height: 42px;
-    max-height: 100px;
-  }
+    .roster-panel.mobile-open {
+      transform: translateX(0);
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.85);
+    }
 
-  .btn-send {
-    padding: 0 1.25rem;
-    font-size: 0.875rem;
-  }
+    .roster-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 90;
+      border: none;
+      cursor: pointer;
+    }
 
-  .edit-modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    padding: 1.5rem;
-  }
+    .btn-roster-toggle {
+      display: inline-flex;
+    }
 
-  .edit-modal {
-    background: #1e293b;
-    border: 1px solid var(--card-border);
-    border-radius: 1rem;
-    padding: 1.75rem;
-    max-width: 400px;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
+    .workspace-header {
+      padding: 0.65rem 1rem;
+    }
 
-  .edit-modal h3 {
-    font-size: 1.15rem;
-    font-weight: 700;
-  }
+    .workspace-banners {
+      padding: 0.5rem 1rem 0 1rem;
+    }
 
-  .modal-hint {
-    font-size: 0.8125rem;
-    color: var(--text-muted);
-    line-height: 1.4;
-  }
+    .chat-timeline {
+      padding: 1rem 0.85rem;
+    }
 
-  .modal-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
+    .composer-container {
+      padding: 0.65rem 0.85rem calc(0.65rem + env(safe-area-inset-bottom, 0px)) 0.85rem;
+    }
+
+    .workspace-recipient-badge {
+      display: none;
+    }
   }
 </style>

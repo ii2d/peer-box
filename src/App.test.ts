@@ -723,4 +723,118 @@ describe('PeerBox App Component', () => {
     unmount(component);
     target.remove();
   });
+
+  it('renders 2-column desktop workspace layout with Roster panel and main workspace', async () => {
+    window.history.replaceState({}, '', '/desktop-room#key=secret123');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('local-user');
+
+    const component = mount(App, { target, props: { transport } });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    // Verify 2-column shell components
+    const roster = target.querySelector('[data-testid="roster-panel"]');
+    const mainWorkspace = target.querySelector('[data-testid="workspace-main"]');
+    expect(roster).not.toBeNull();
+    expect(mainWorkspace).not.toBeNull();
+
+    // Verify Roster panel contents
+    expect(roster?.textContent).toContain('desktop-room');
+    expect(roster?.querySelector('[data-testid="roster-copy-link-btn"]')).not.toBeNull();
+    expect(roster?.querySelector('.badge-encrypted')).not.toBeNull();
+    expect(roster?.querySelector('[data-testid="persona-badge"]')).not.toBeNull();
+    expect(roster?.querySelector('[data-testid="presence-bar"]')).not.toBeNull();
+    expect(roster?.querySelector('[data-testid="persist-toggle-btn"]')).not.toBeNull();
+    expect(roster?.querySelector('[data-testid="leave-btn"]')).not.toBeNull();
+
+    // Verify Main Workspace header contents
+    expect(mainWorkspace?.querySelector('[data-testid="current-room-name"]')?.textContent).toBe(
+      'desktop-room',
+    );
+    expect(mainWorkspace?.querySelector('[data-testid="trust-guarantee-btn"]')).not.toBeNull();
+    expect(mainWorkspace?.querySelector('[data-testid="share-room-btn"]')).not.toBeNull();
+    expect(
+      mainWorkspace?.querySelector('[data-testid="chat-timeline"] .timeline-inner'),
+    ).not.toBeNull();
+    expect(mainWorkspace?.querySelector('.composer-container .composer-inner')).not.toBeNull();
+
+    unmount(component);
+    target.remove();
+  });
+
+  it('allows clicking a peer in the Roster to select them as direct recipient', async () => {
+    window.history.replaceState({}, '', '/whisper-room');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('user-local');
+    const transport2 = new InMemoryTransport('peer-remote');
+
+    const component = mount(App, { target, props: { transport: transport1 } });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    await transport2.joinRoom({ roomId: 'whisper-room' });
+    flushSync();
+
+    const peerItem = target.querySelector<HTMLElement>('[data-testid="peer-item"]');
+    expect(peerItem).not.toBeNull();
+
+    // Click peer to initiate whisper
+    const peerBtn = peerItem?.querySelector<HTMLButtonElement>('button') || peerItem;
+    peerBtn?.click();
+    flushSync();
+
+    // Recipient selector and indicator should reflect the selection
+    const recipientSelect = target.querySelector<HTMLSelectElement>(
+      '[data-testid="recipient-select"]',
+    );
+    expect(recipientSelect?.value).toBe('peer-remote');
+
+    const indicator = target.querySelector('[data-testid="recipient-indicator"]');
+    expect(indicator?.textContent).toContain('peer-remote');
+
+    // Click reset indicator to go back to Everyone
+    const resetBtn = target.querySelector<HTMLButtonElement>('[data-testid="reset-recipient-btn"]');
+    resetBtn?.click();
+    flushSync();
+
+    expect(recipientSelect?.value).toBe('everyone');
+
+    unmount(component);
+    target.remove();
+  });
+
+  it('copies room link with key from Roster 1-click copy button', async () => {
+    window.history.replaceState({}, '', '/copy-room#key=mysecret');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport = new InMemoryTransport('user-local');
+
+    const writeTextSpy = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextSpy,
+      },
+    });
+
+    const component = mount(App, { target, props: { transport } });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    const copyBtn = target.querySelector<HTMLButtonElement>(
+      '[data-testid="roster-copy-link-btn"]',
+    )!;
+    expect(copyBtn).not.toBeNull();
+    copyBtn.click();
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining('/copy-room#key=mysecret'));
+    expect(copyBtn.textContent).toContain('Copied');
+
+    unmount(component);
+    target.remove();
+  });
 });
