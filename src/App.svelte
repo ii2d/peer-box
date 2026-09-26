@@ -24,6 +24,7 @@
   import type { PeerConnectionStats } from './lib/transport/types';
   import TrustGuaranteeModal from './lib/trust/TrustGuaranteeModal.svelte';
   import RoomShareModal from './lib/share/RoomShareModal.svelte';
+  import PortalView from './lib/portal/PortalView.svelte';
 
   interface Props {
     transport?: RoomTransport;
@@ -239,8 +240,7 @@
     errorMessage = null;
   }
 
-  async function handleJoinSubmit(e: SubmitEvent) {
-    e.preventDefault();
+  async function handleJoinRoom() {
     const clean = sanitizeRoomName(inputRoomName);
     if (!clean) {
       errorMessage = 'Please enter or generate a room name.';
@@ -248,6 +248,13 @@
     }
     errorMessage = null;
     await join(clean, inputRoomKey || null, true);
+  }
+
+  async function handleCreateInstantRoom() {
+    const generated = generateRoomName();
+    inputRoomName = generated;
+    errorMessage = null;
+    await join(generated, inputRoomKey || null, true);
   }
 
   async function join(roomId: string, roomKey: string | null, updateHistory = true) {
@@ -617,74 +624,14 @@
 
 <main class="container">
   {#if !currentRoomId}
-    <div class="card landing-card">
-      <div class="header">
-        <div class="logo-badge">
-          <span class="logo-icon">📦</span>
-          <span class="logo-text">Peer-to-Peer</span>
-        </div>
-        <h1 class="title">PeerBox</h1>
-        <p class="subtitle">
-          Direct, encrypted browser-to-browser rooms. Zero servers, zero uploads, zero tracking.
-        </p>
-      </div>
-
-      <form class="join-form" onsubmit={handleJoinSubmit}>
-        <div class="form-group">
-          <label for="room-name">Room Name</label>
-          <div class="input-with-action">
-            <input
-              id="room-name"
-              data-testid="room-input"
-              type="text"
-              placeholder="e.g. cute-dog"
-              bind:value={inputRoomName}
-              autocomplete="off"
-              spellcheck="false"
-            />
-            <button
-              type="button"
-              class="btn-secondary btn-icon"
-              data-testid="random-btn"
-              onclick={handleRandomName}
-              title="Generate Random Name"
-            >
-              🎲 Random
-            </button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="room-key">
-            Room Key <span class="label-optional">(optional secret)</span>
-          </label>
-          <input
-            id="room-key"
-            data-testid="key-input"
-            type="password"
-            placeholder="Derives client-side AES-GCM encryption key"
-            bind:value={inputRoomKey}
-            autocomplete="new-password"
-          />
-        </div>
-
-        {#if errorMessage}
-          <div class="error-banner" data-testid="error-banner">
-            {errorMessage}
-          </div>
-        {/if}
-
-        <button type="submit" class="btn-primary btn-block" data-testid="join-btn">
-          Join Room
-        </button>
-      </form>
-
-      <div class="trust-chips">
-        <span class="trust-chip">🔒 End-to-End Encrypted</span>
-        <span class="trust-chip">⚡ Direct P2P (No Servers)</span>
-        <span class="trust-chip">🧹 Zero Logs & Cookies</span>
-      </div>
-    </div>
+    <PortalView
+      bind:roomName={inputRoomName}
+      bind:roomKey={inputRoomKey}
+      {errorMessage}
+      onRandomName={handleRandomName}
+      onJoin={handleJoinRoom}
+      onCreateInstant={handleCreateInstantRoom}
+    />
   {:else}
     <div class="card room-card" data-testid="room-view">
       <div class="room-header">
@@ -1125,80 +1072,6 @@
     min-height: 580px;
   }
 
-  .header {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-
-  .logo-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0.85rem;
-    background: rgba(99, 102, 241, 0.15);
-    border: 1px solid var(--badge-border);
-    border-radius: 9999px;
-    margin-bottom: 1rem;
-  }
-
-  .logo-icon {
-    font-size: 1rem;
-  }
-
-  .logo-text {
-    font-size: 0.875rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: var(--badge-text);
-  }
-
-  .title {
-    font-size: 2.25rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-
-  .subtitle {
-    font-size: 0.95rem;
-    color: var(--text-muted);
-    line-height: 1.5;
-  }
-
-  .join-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    margin-bottom: 2rem;
-  }
-
-  .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    text-align: left;
-  }
-
-  label {
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: var(--text-main);
-  }
-
-  .label-optional {
-    color: var(--text-muted);
-    font-weight: 400;
-  }
-
-  .input-with-action {
-    display: flex;
-    gap: 0.5rem;
-  }
-
   input[type='text'],
   input[type='password'],
   .composer-textarea {
@@ -1267,39 +1140,9 @@
     padding: 0.4rem 0.75rem;
   }
 
-  .btn-block {
-    width: 100%;
-  }
-
   .btn-icon-persist {
     font-size: 0.75rem;
     padding: 0.35rem 0.75rem;
-  }
-
-  .error-banner {
-    padding: 0.625rem 0.875rem;
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 0.5rem;
-    color: #fca5a5;
-    font-size: 0.8125rem;
-  }
-
-  .trust-chips {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
-    border-top: 1px solid var(--card-border);
-    padding-top: 1.5rem;
-  }
-
-  .trust-chip {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    background: rgba(255, 255, 255, 0.04);
-    padding: 0.25rem 0.625rem;
-    border-radius: 9999px;
   }
 
   .room-header {
