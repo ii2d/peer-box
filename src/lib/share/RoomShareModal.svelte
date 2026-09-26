@@ -20,8 +20,7 @@
 
   const shareUrl = $derived.by(() => {
     const shouldInclude = includeKey && !!roomKey;
-    const path = buildRoomUrl(roomId, { roomKey, includeKey: shouldInclude });
-    return `${baseUrl}${path}`;
+    return buildRoomUrl(roomId, { origin: baseUrl, roomKey, includeKey: shouldInclude });
   });
 
   const qrData = $derived.by(() => {

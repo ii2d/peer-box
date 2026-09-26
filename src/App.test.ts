@@ -861,7 +861,7 @@ describe('PeerBox App Component', () => {
     await new Promise((r) => setTimeout(r, 10));
     flushSync();
 
-    expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining('/copy-room#key=mysecret'));
+    expect(writeTextSpy).toHaveBeenCalledWith(`${window.location.origin}/copy-room#key=mysecret`);
     expect(copyBtn.textContent).toContain('Copied');
 
     unmount(component);

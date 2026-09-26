@@ -43,12 +43,10 @@
 
   async function copyRoomLink() {
     if (!roomId || typeof window === 'undefined') return;
-    const baseUrl = window.location.origin;
-    const path = buildRoomUrl(roomId, {
+    const shareUrl = buildRoomUrl(roomId, {
       roomKey,
       includeKey: !!roomKey,
     });
-    const shareUrl = `${baseUrl}${path}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
       isRoomLinkCopied = true;

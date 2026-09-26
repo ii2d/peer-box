@@ -32,8 +32,7 @@ describe('RoomShareModal', () => {
     expect(target.querySelector('[data-testid="share-modal"]')).toBeTruthy();
     expect(target.querySelector('[data-testid="qr-code"]')).toBeTruthy();
     const urlText = target.querySelector('[data-testid="share-url-text"]');
-    expect(urlText?.textContent).toContain('happy-fox');
-    expect(urlText?.textContent).toContain('secret99');
+    expect(urlText?.textContent).toBe(`${window.location.origin}/happy-fox#key=secret99`);
 
     unmount(component);
     target.remove();
@@ -60,8 +59,7 @@ describe('RoomShareModal', () => {
     flushSync();
 
     const urlText = target.querySelector('[data-testid="share-url-text"]');
-    expect(urlText?.textContent).toContain('happy-fox');
-    expect(urlText?.textContent).not.toContain('secret99');
+    expect(urlText?.textContent).toBe(`${window.location.origin}/happy-fox`);
 
     unmount(component);
     target.remove();
