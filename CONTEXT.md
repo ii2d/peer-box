@@ -22,6 +22,10 @@ _Avoid_: Password, PIN, auth token
 The verifiable architectural and cryptographic assurances (Zero Servers, End-to-End Encryption, Ephemeral Memory, Direct P2P) communicated to peers.
 _Avoid_: Privacy policy, terms of service, disclaimer
 
+**Agent Brief**:
+The structured, machine-readable declaration of PeerBox's architectural guarantees, capabilities, and protocol boundaries served to AI search agents and LLM crawlers.
+_Avoid_: System prompt, documentation, wiki, README, metadata file
+
 ### Identity
 
 **Peer**:
