@@ -58,10 +58,14 @@
         ]
       }
     </script>
+    <link rel="stylesheet" href="/src/app.css" />
   </head>
   <body>
-    <!-- Pre-baked semantic Portal content for non-JS crawlers & AI scrapers -->
-    <div id="app">
+    <!-- Clean SPA mount container (prevents FOUC / raw content flash) -->
+    <div id="app"></div>
+
+    <!-- Fallback semantic content for non-JS crawlers & AI scrapers -->
+    <noscript>
       <header>
         <nav aria-label="Quick links">
           <a href="/about/">About &amp; Architecture</a>
@@ -95,7 +99,7 @@
           <a href="/llms.txt">Agent Brief (llms.txt)</a>
         </p>
       </footer>
-    </div>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
