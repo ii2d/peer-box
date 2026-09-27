@@ -59,6 +59,7 @@ export class TransferService {
   private transfers = new Map<string, FileTransferItem>();
   private incoming = new Map<string, ActiveIncomingTransfer>();
   private outgoing = new Map<string, ActiveOutgoingTransfer>();
+  private orphanChunks = new Map<string, Array<{ chunkIndex: number; data: Uint8Array }>>();
   private updateListeners = new Set<(item: FileTransferItem) => void>();
 
   private unsubs: Array<() => void> = [];
@@ -156,13 +157,32 @@ export class TransferService {
       telemetry: createTransferTelemetry(meta.size),
       cancelled: false,
     };
-    this.incoming.set(meta.id, incomingTransfer);
 
+    // Recover any orphan chunks that arrived before metadata
+    const orphans = this.orphanChunks.get(meta.id);
+    if (orphans && orphans.length > 0) {
+      for (const orphan of orphans) {
+        incomingTransfer.pendingChunks.set(orphan.chunkIndex, orphan.data);
+        incomingTransfer.receivedChunks++;
+        incomingTransfer.bytesReceived += orphan.data.byteLength;
+      }
+      this.orphanChunks.delete(meta.id);
+
+      item.receivedChunks = incomingTransfer.receivedChunks;
+      item.bytesTransferred = incomingTransfer.bytesReceived;
+      item.progress = Math.min(1, incomingTransfer.bytesReceived / meta.size);
+    }
+
+    this.incoming.set(meta.id, incomingTransfer);
     this.notify(item);
 
     // If small file, auto-accept immediately
     if (!meta.isLarge) {
-      void this.startIncomingSink(meta.id);
+      void this.startIncomingSink(meta.id).then(() => {
+        if (incomingTransfer.pendingChunks.size > 0) {
+          void this.drainPendingChunks(meta.id);
+        }
+      });
     }
   }
 
@@ -342,7 +362,15 @@ export class TransferService {
     const chunk = unpackChunk(rawPacket);
     const inc = this.incoming.get(chunk.transferId);
     const item = this.transfers.get(chunk.transferId);
-    if (!inc || !item || inc.cancelled) return;
+
+    if (!inc || !item || inc.cancelled) {
+      if (!inc && !item) {
+        const list = this.orphanChunks.get(chunk.transferId) || [];
+        list.push({ chunkIndex: chunk.chunkIndex, data: chunk.data });
+        this.orphanChunks.set(chunk.transferId, list);
+      }
+      return;
+    }
 
     if (!inc.sinkPromise) {
       void this.startIncomingSink(chunk.transferId);
@@ -565,6 +593,7 @@ export class TransferService {
     }
     this.incoming.clear();
     this.outgoing.clear();
+    this.orphanChunks.clear();
 
     for (const item of this.transfers.values()) {
       if (item.blobUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
