@@ -107,6 +107,7 @@ export class TrysteroTransport implements RoomTransport {
         ...existing,
         name: peerProfile.name,
         color: peerProfile.color,
+        emoji: peerProfile.emoji,
       };
       this.peers.set(senderId, updated);
       for (const listener of this.peerJoinListeners) {

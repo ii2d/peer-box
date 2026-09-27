@@ -27,12 +27,16 @@
   import Composer from './lib/workspace/Composer.svelte';
   import RosterPanel from './lib/workspace/RosterPanel.svelte';
   import WorkspaceHeader from './lib/workspace/WorkspaceHeader.svelte';
+  import { RoomNoticeManager, type RoomNotice } from './lib/room/room-notices';
 
   interface Props {
     transport?: RoomTransport;
+    noticeManager?: RoomNoticeManager;
   }
 
-  let { transport = new InMemoryTransport() }: Props = $props();
+  let { transport = new InMemoryTransport(), noticeManager = new RoomNoticeManager() }: Props =
+    $props();
+  let roomNotices = $state<RoomNotice[]>([]);
 
   let currentRoomId = $state<string | null>(null);
   let currentRoomKey = $state<string | null>(null);
@@ -93,7 +97,8 @@
 
   type TimelineItem =
     | { type: 'chat'; id: string; timestamp: number; message: ChatMessage }
-    | { type: 'transfer'; id: string; timestamp: number; transfer: FileTransferItem };
+    | { type: 'transfer'; id: string; timestamp: number; transfer: FileTransferItem }
+    | { type: 'notice'; id: string; timestamp: number; notice: RoomNotice };
 
   const timelineItems = $derived<TimelineItem[]>(
     [
@@ -109,12 +114,24 @@
         timestamp: t.meta.timestamp,
         transfer: t,
       })),
+      ...roomNotices.map((n) => ({
+        type: 'notice' as const,
+        id: n.id,
+        timestamp: n.timestamp,
+        notice: n,
+      })),
     ].sort((a, b) => a.timestamp - b.timestamp),
   );
 
   let unsubs: Array<() => void> = [];
 
   onMount(() => {
+    unsubs.push(
+      noticeManager.subscribe((notices) => {
+        roomNotices = notices;
+      }),
+    );
+
     unsubs.push(
       transport.onPeerJoin((peer) => {
         const existingIdx = connectedPeers.findIndex((p) => p.id === peer.id);
@@ -123,6 +140,7 @@
         } else {
           connectedPeers = [...connectedPeers, peer];
         }
+        noticeManager.handlePeerJoin(peer);
         resetAloneTimer();
         void updatePeerStats();
       }),
@@ -130,7 +148,9 @@
 
     unsubs.push(
       transport.onPeerLeave((peerId) => {
+        const leavingPeer = connectedPeers.find((p) => p.id === peerId);
         connectedPeers = connectedPeers.filter((p) => p.id !== peerId);
+        noticeManager.handlePeerLeave(peerId, leavingPeer);
         const copy = { ...peerStats };
         delete copy[peerId];
         peerStats = copy;
@@ -178,6 +198,7 @@
   });
 
   onDestroy(() => {
+    noticeManager.destroy();
     for (const u of unsubs) u();
     if (aloneTimer) clearTimeout(aloneTimer);
     stopStatsPolling();
@@ -272,6 +293,7 @@
       peerStats = {};
       selectedRecipientId = 'everyone';
       selectedDiagnosticsPeerId = null;
+      noticeManager.reset();
 
       await transport.joinRoom({ roomId, roomKey });
       currentRoomId = roomId;
@@ -329,6 +351,7 @@
   }
 
   function leave(updateHistory = true) {
+    noticeManager.reset();
     stopStatsPolling();
     peerStats = {};
     selectedDiagnosticsPeerId = null;
@@ -780,6 +803,25 @@
                     onCancel={handleCancelTransfer}
                     onExport={handleExportTransfer}
                   />
+                {:else if item.type === 'notice'}
+                  <div class="room-notice-wrapper" data-testid="room-notice">
+                    <div class="room-notice">
+                      {#if item.notice.personaEmoji}
+                        <span
+                          class="notice-avatar"
+                          style:background-color={item.notice.personaColor ||
+                            'var(--color-bg-tertiary)'}
+                        >
+                          {item.notice.personaEmoji}
+                        </span>
+                      {/if}
+                      <span class="notice-name">{item.notice.personaName}</span>
+                      <span class="notice-action">
+                        {item.notice.kind === 'join' ? 'joined the room' : 'left the room'}
+                      </span>
+                      <span class="notice-time">{formatTimestamp(item.notice.timestamp)}</span>
+                    </div>
+                  </div>
                 {/if}
               {/each}
             {/if}
@@ -1037,6 +1079,50 @@
     color: var(--text-muted);
     max-width: 400px;
     margin: 0 auto;
+  }
+
+  .room-notice-wrapper {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 0.35rem 0;
+  }
+
+  .room-notice {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .notice-avatar {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.625rem;
+  }
+
+  .notice-name {
+    font-weight: 600;
+    color: var(--text-main);
+  }
+
+  .notice-action {
+    color: var(--text-muted);
+  }
+
+  .notice-time {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    opacity: 0.75;
   }
 
   .message-wrapper {
