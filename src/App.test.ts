@@ -5,6 +5,7 @@ import {
   InMemoryTransport,
   resetInMemoryTransportRooms,
 } from './lib/transport/in-memory-transport';
+import { RoomNoticeManager } from './lib/room/room-notices';
 
 describe('PeerBox App Component', () => {
   beforeEach(() => {
@@ -916,6 +917,48 @@ describe('PeerBox App Component', () => {
     expect(target.querySelector<HTMLSelectElement>('[data-testid="recipient-select"]')?.value).toBe(
       'peer-remote',
     );
+
+    unmount(component);
+    target.remove();
+  });
+
+  it('renders room notices in timeline when remote peer joins and leaves', async () => {
+    window.history.replaceState({}, '', '/notice-room');
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const transport1 = new InMemoryTransport('local-peer');
+    const transport2 = new InMemoryTransport('remote-peer');
+    const noticeManager = new RoomNoticeManager({
+      quietPeriodMs: 0,
+      leaveGracePeriodMs: 0,
+      personaTimeoutMs: 0,
+    });
+
+    const component = mount(App, {
+      target,
+      props: { transport: transport1, noticeManager },
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+
+    // Remote peer joins room
+    await transport2.joinRoom({ roomId: 'notice-room' });
+    flushSync();
+
+    // Notice should be rendered in timeline
+    const notices = target.querySelectorAll('[data-testid="room-notice"]');
+    expect(notices.length).toBe(1);
+    expect(notices[0].textContent).toContain('remote-peer');
+    expect(notices[0].textContent).toContain('joined the room');
+
+    // Remote peer leaves
+    transport2.leaveRoom();
+    flushSync();
+
+    const updatedNotices = target.querySelectorAll('[data-testid="room-notice"]');
+    expect(updatedNotices.length).toBe(2);
+    expect(updatedNotices[1].textContent).toContain('remote-peer');
+    expect(updatedNotices[1].textContent).toContain('left the room');
 
     unmount(component);
     target.remove();
