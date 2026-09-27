@@ -275,4 +275,36 @@
   .btn-send:hover {
     background: #4f46e5;
   }
+
+  @media (max-width: 640px) {
+    .screengrab-tray {
+      padding: 10px 12px;
+    }
+
+    .tray-content {
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .thumbnail-wrapper {
+      width: 100%;
+      height: 120px;
+    }
+
+    .tray-header {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tray-actions {
+      justify-content: stretch;
+    }
+
+    .btn-cancel,
+    .btn-send {
+      flex: 1;
+      text-align: center;
+      padding: 8px 12px;
+    }
+  }
 </style>

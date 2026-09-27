@@ -619,7 +619,15 @@
   function formatTimestamp(ts: number): string {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
+
+  function handleWindowKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && isMobileRosterOpen) {
+      closeMobileRoster();
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleWindowKeydown} />
 
 <div class="app-main" class:in-room={!!currentRoomId}>
   {#if !currentRoomId}
@@ -660,6 +668,7 @@
         onOpenDiagnostics={openDiagnostics}
         onTogglePersistence={togglePersistence}
         onLeave={() => leave(true)}
+        onCloseMobile={closeMobileRoster}
       />
 
       <!-- Right Main Workspace Panel -->
@@ -1199,20 +1208,42 @@
     .roster-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.65);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
       z-index: 90;
       border: none;
       cursor: pointer;
     }
 
     .workspace-banners {
-      padding: 0.5rem 1rem 0 1rem;
+      padding: 0.5rem 0.75rem 0 0.75rem;
+    }
+
+    .diagnostic-banner {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.65rem;
+    }
+
+    .diagnostic-banner .btn-secondary {
+      align-self: flex-start;
     }
 
     .chat-timeline {
-      padding: 1rem 0.85rem;
+      padding: 0.75rem 0.75rem;
+    }
+
+    .message-wrapper {
+      max-width: 90%;
+    }
+
+    .empty-timeline {
+      padding: 2.5rem 1rem;
+    }
+
+    .transfer-error-toast {
+      margin: 0.5rem 0.75rem 0 0.75rem;
     }
   }
 </style>
