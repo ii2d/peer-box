@@ -8,11 +8,16 @@
     onSend?: (file: File) => void;
     onCancel?: () => void;
     recipientName?: string;
+    status?: VoiceRecorderStatus;
   }
 
-  let { onSend, onCancel, recipientName = 'Everyone' }: Props = $props();
+  let {
+    onSend,
+    onCancel,
+    recipientName = 'Everyone',
+    status = $bindable('idle'),
+  }: Props = $props();
 
-  let status: VoiceRecorderStatus = $state('idle');
   let elapsedMs = $state(0);
   let audioLevel = $state(0);
   let recording: VoiceRecording | null = $state(null);
@@ -70,7 +75,11 @@
   });
 </script>
 
-<div class="voice-recorder-widget" data-testid="voice-recorder-widget">
+<div
+  class="voice-recorder-widget"
+  class:active={status !== 'idle'}
+  data-testid="voice-recorder-widget"
+>
   {#if status === 'idle'}
     <button
       type="button"
@@ -136,7 +145,11 @@
   {:else if status === 'previewing' && recording}
     <div class="preview-bar" data-testid="voice-preview-bar">
       <div class="preview-player-wrap" data-testid="voice-preview">
-        <WaveformPlayer src={recording.url} fileName={recording.file.name} />
+        <WaveformPlayer
+          src={recording.url}
+          fileName={recording.file.name}
+          durationMs={recording.durationMs}
+        />
       </div>
 
       <div class="preview-actions">
@@ -168,6 +181,11 @@
     align-items: center;
   }
 
+  .voice-recorder-widget.active {
+    width: 100%;
+    display: flex;
+  }
+
   .mic-btn {
     display: flex;
     align-items: center;
@@ -197,17 +215,21 @@
   .recording-bar {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 6px 14px;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 16px;
     background: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 20px;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 9999px;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .recording-indicator {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
   }
 
   .pulse-dot {
@@ -231,6 +253,8 @@
     align-items: center;
     gap: 3px;
     height: 24px;
+    flex: 1;
+    justify-content: center;
   }
 
   .wave-bar {
@@ -244,12 +268,13 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
   }
 
   .btn-cancel-recording,
   .btn-stop-recording {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     border: none;
     cursor: pointer;
@@ -257,15 +282,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.15s ease;
   }
 
   .btn-cancel-recording {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.12);
     color: #ffffff;
   }
 
   .btn-cancel-recording:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.22);
   }
 
   .btn-stop-recording {
@@ -280,48 +306,77 @@
 
   .preview-bar {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    gap: 10px;
     width: 100%;
-    max-width: 600px;
+    box-sizing: border-box;
+  }
+
+  @media (min-width: 641px) {
+    .preview-bar {
+      flex-direction: row;
+      align-items: center;
+      gap: 12px;
+    }
   }
 
   .preview-player-wrap {
+    width: 100%;
     flex: 1;
+    min-width: 0;
   }
 
   .preview-actions {
     display: flex;
     align-items: center;
     gap: 8px;
+    width: 100%;
+  }
+
+  @media (min-width: 641px) {
+    .preview-actions {
+      width: auto;
+      flex-shrink: 0;
+    }
   }
 
   .btn-discard {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.7);
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 12px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    text-align: center;
   }
 
   .btn-discard:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(239, 68, 68, 0.22);
+    color: #ffffff;
   }
 
   .btn-send-voice {
-    background: #6366f1;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
     border: none;
     color: #ffffff;
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
+    box-shadow: 0 4px 14px 0 var(--primary-glow);
+    transition: all 0.15s ease;
+    flex: 1;
+    white-space: nowrap;
+    text-align: center;
   }
 
   .btn-send-voice:hover {
-    background: #4f46e5;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px 0 var(--primary-glow);
   }
 </style>

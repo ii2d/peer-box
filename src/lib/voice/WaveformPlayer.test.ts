@@ -40,4 +40,23 @@ describe('WaveformPlayer', () => {
     unmount(component);
     target.remove();
   });
+
+  it('displays accurate duration when durationMs is provided', () => {
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const component = mount(WaveformPlayer, {
+      target,
+      props: {
+        src: 'blob:mock-audio',
+        fileName: 'voice-note.webm',
+        durationMs: 3000,
+      },
+    });
+
+    const timeDisplay = target.querySelector('[data-testid="audio-time"]');
+    expect(timeDisplay?.textContent?.trim()).toBe('00:00 / 00:03');
+
+    unmount(component);
+    target.remove();
+  });
 });

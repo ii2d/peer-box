@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PeerInfo } from '../transport/types';
   import VoiceNoteRecorder from '../voice/VoiceNoteRecorder.svelte';
+  import type { VoiceRecorderStatus } from '../voice/types';
 
   interface Props {
     chatInput?: string;
@@ -22,13 +23,14 @@
     onCaptureScreenGrab,
   }: Props = $props();
 
+  let voiceStatus = $state<VoiceRecorderStatus>('idle');
+  let textareaEl = $state<HTMLTextAreaElement | null>(null);
+
   const recipientDisplayName = $derived(
     selectedRecipientId === 'everyone'
       ? 'Everyone'
       : connectedPeers.find((p) => p.id === selectedRecipientId)?.name || 'Selected Peer',
   );
-
-  let textareaEl = $state<HTMLTextAreaElement | null>(null);
 
   function handleFileInputChange(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -61,11 +63,11 @@
   });
 </script>
 
-<footer class="composer-container">
-  <div class="composer-inner">
-    <div class="composer-toolbar">
-      <div class="composer-toolbar-left">
-        <div class="recipient-selector-wrapper">
+<footer class="composer-container" class:voice-active={voiceStatus !== 'idle'}>
+  <div class="composer-inner" class:voice-active={voiceStatus !== 'idle'}>
+    <div class="composer-toolbar" class:voice-active={voiceStatus !== 'idle'}>
+      <div class="composer-toolbar-left" class:voice-active={voiceStatus !== 'idle'}>
+        <div class="recipient-selector-wrapper" class:hidden-when-voice={voiceStatus !== 'idle'}>
           <span class="recipient-label">Send to:</span>
           <select
             class="recipient-select"
@@ -82,7 +84,12 @@
           </select>
         </div>
 
-        <label class="btn-attach" title="Attach file (<25MB)" data-testid="attach-file-btn">
+        <label
+          class="btn-attach"
+          class:hidden-when-voice={voiceStatus !== 'idle'}
+          title="Attach file (<25MB)"
+          data-testid="attach-file-btn"
+        >
           <span class="attach-icon">📎</span>
           <span class="attach-text">Attach</span>
           <input
@@ -94,11 +101,16 @@
           />
         </label>
 
-        <VoiceNoteRecorder recipientName={recipientDisplayName} onSend={onSendVoiceNote} />
+        <VoiceNoteRecorder
+          recipientName={recipientDisplayName}
+          onSend={onSendVoiceNote}
+          bind:status={voiceStatus}
+        />
 
         <button
           type="button"
           class="btn-screengrab"
+          class:hidden-when-voice={voiceStatus !== 'idle'}
           data-testid="screengrab-btn"
           title="Capture Screen Grab"
           onclick={onCaptureScreenGrab}
@@ -110,7 +122,7 @@
       </div>
     </div>
 
-    <div class="composer-input-row">
+    <div class="composer-input-row" class:hidden-when-voice={voiceStatus !== 'idle'}>
       <textarea
         bind:this={textareaEl}
         class="composer-textarea"
@@ -163,6 +175,10 @@
     width: 100%;
   }
 
+  .composer-toolbar.voice-active {
+    width: 100%;
+  }
+
   .composer-toolbar-left {
     display: flex;
     align-items: center;
@@ -173,6 +189,16 @@
     scrollbar-width: none;
     max-width: 100%;
     padding: 0.1rem 0;
+  }
+
+  .composer-toolbar-left.voice-active {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .hidden-when-voice {
+    display: none !important;
   }
 
   .composer-toolbar-left::-webkit-scrollbar {
