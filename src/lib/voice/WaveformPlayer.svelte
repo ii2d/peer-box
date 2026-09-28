@@ -5,14 +5,18 @@
   interface Props {
     src: string;
     fileName?: string;
+    durationMs?: number;
   }
 
-  let { src, fileName = 'Voice Note' }: Props = $props();
+  let { src, fileName = 'Voice Note', durationMs }: Props = $props();
 
   let audioElement: HTMLAudioElement | null = $state(null);
   let isPlaying = $state(false);
   let currentTime = $state(0);
-  let duration = $state(0);
+  let audioDuration = $state(0);
+  let duration = $derived(
+    durationMs && Number.isFinite(durationMs) && durationMs > 0 ? durationMs / 1000 : audioDuration,
+  );
 
   // Generate deterministic bar heights for visual waveform aesthetics
   const WAVE_BARS = [
@@ -35,15 +39,31 @@
   function handleTimeUpdate(): void {
     if (!audioElement) return;
     currentTime = audioElement.currentTime;
-    if (audioElement.duration && !isNaN(audioElement.duration)) {
-      duration = audioElement.duration;
+    const d = audioElement.duration;
+    if (Number.isFinite(d) && d > 0 && (!audioDuration || audioDuration <= 0)) {
+      audioDuration = d;
     }
   }
 
   function handleLoadedMetadata(): void {
     if (!audioElement) return;
-    if (audioElement.duration && !isNaN(audioElement.duration)) {
-      duration = audioElement.duration;
+    const d = audioElement.duration;
+    if (Number.isFinite(d) && d > 0) {
+      if (!audioDuration || audioDuration <= 0) {
+        audioDuration = d;
+      }
+    } else if (d === Infinity) {
+      // Chromium bug: MediaRecorder WebM blobs report Infinity duration until seeked.
+      const handleSeekFix = () => {
+        if (!audioElement) return;
+        audioElement.removeEventListener('timeupdate', handleSeekFix);
+        if (Number.isFinite(audioElement.duration) && audioElement.duration > 0) {
+          audioDuration = audioElement.duration;
+        }
+        audioElement.currentTime = 0;
+      };
+      audioElement.addEventListener('timeupdate', handleSeekFix, { once: true });
+      audioElement.currentTime = 1e10;
     }
   }
 
@@ -145,7 +165,7 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     width: 100%;
-    max-width: 420px;
+    max-width: 100%;
     box-sizing: border-box;
   }
 

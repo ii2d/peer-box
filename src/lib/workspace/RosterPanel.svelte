@@ -21,6 +21,7 @@
     onOpenDiagnostics: (peerId: string) => void;
     onTogglePersistence: () => void;
     onLeave: () => void;
+    onCloseMobile?: () => void;
   }
 
   const {
@@ -38,6 +39,7 @@
     onOpenDiagnostics,
     onTogglePersistence,
     onLeave,
+    onCloseMobile = () => {},
   }: Props = $props();
 
   let isRoomLinkCopied = $state(false);
@@ -64,9 +66,21 @@
 
 <aside class="roster-panel" data-testid="roster-panel" class:mobile-open={isMobileOpen}>
   <div class="roster-header">
-    <div class="roster-brand">
-      <BrandIcon size={22} />
-      <span class="roster-brand-title">PeerBox</span>
+    <div class="roster-brand-row">
+      <div class="roster-brand">
+        <BrandIcon size={22} />
+        <span class="roster-brand-title">PeerBox</span>
+      </div>
+      <button
+        type="button"
+        class="btn-close-roster"
+        data-testid="roster-close-btn"
+        onclick={onCloseMobile}
+        aria-label="Close roster panel"
+        title="Close"
+      >
+        ✕
+      </button>
     </div>
 
     <div class="roster-room-info">
@@ -242,10 +256,37 @@
     gap: 0.75rem;
   }
 
+  .roster-brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
   .roster-brand {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+  }
+
+  .btn-close-roster {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 0.5rem;
+    border: 1px solid var(--card-border);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-close-roster:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
   }
 
   .roster-brand-title {
@@ -617,16 +658,28 @@
       top: 0;
       left: 0;
       bottom: 0;
-      width: 280px;
-      max-width: 82vw;
+      width: 290px;
+      max-width: 85vw;
       z-index: 100;
       transform: translateX(-100%);
       transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.85);
+    }
+
+    .roster-header {
+      padding-top: max(1.25rem, env(safe-area-inset-top, 0px));
+    }
+
+    .roster-footer {
+      padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    }
+
+    .btn-close-roster {
+      display: inline-flex;
     }
 
     .roster-panel.mobile-open {
       transform: translateX(0);
-      box-shadow: 0 0 40px rgba(0, 0, 0, 0.85);
     }
   }
 </style>

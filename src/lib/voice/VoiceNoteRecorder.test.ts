@@ -123,6 +123,8 @@ describe('VoiceNoteRecorder', () => {
     flushSync();
 
     expect(target.querySelector('[data-testid="voice-preview"]')).toBeTruthy();
+    const audioTime = target.querySelector('[data-testid="audio-time"]');
+    expect(audioTime?.textContent).toContain('00:00 / 00:01');
     const sendBtn = target.querySelector<HTMLButtonElement>('[data-testid="send-voice-btn"]');
     expect(sendBtn).toBeTruthy();
     sendBtn?.click();

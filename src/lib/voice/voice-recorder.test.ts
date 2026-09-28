@@ -102,4 +102,21 @@ describe('VoiceRecorder', () => {
     expect(mockTrack.stop).toHaveBeenCalled();
     expect(recorder.getStatus()).toBe('idle');
   });
+
+  describe('formatDuration', () => {
+    it('formats millisecond durations into mm:ss', async () => {
+      const { formatDuration } = await import('./voice-recorder');
+      expect(formatDuration(0)).toBe('00:00');
+      expect(formatDuration(3000)).toBe('00:03');
+      expect(formatDuration(65000)).toBe('01:05');
+      expect(formatDuration(3600000)).toBe('60:00');
+    });
+
+    it('gracefully returns 00:00 for Infinity, NaN, and negative numbers', async () => {
+      const { formatDuration } = await import('./voice-recorder');
+      expect(formatDuration(Infinity)).toBe('00:00');
+      expect(formatDuration(NaN)).toBe('00:00');
+      expect(formatDuration(-500)).toBe('00:00');
+    });
+  });
 });

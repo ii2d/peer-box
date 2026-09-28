@@ -562,4 +562,36 @@
   .btn-download:hover {
     background: var(--primary-hover);
   }
+
+  @media (max-width: 640px) {
+    .transfer-wrapper {
+      max-width: 92%;
+    }
+
+    .transfer-card {
+      padding: 0.75rem 0.85rem;
+      gap: 0.65rem;
+    }
+
+    .file-name {
+      max-width: 100%;
+    }
+
+    .decision-actions {
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .btn-accept,
+    .btn-decline {
+      width: 100%;
+      text-align: center;
+      padding: 0.45rem 0.75rem;
+    }
+
+    .progress-label {
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+  }
 </style>
