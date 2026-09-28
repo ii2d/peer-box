@@ -13,15 +13,10 @@
   let audioElement: HTMLAudioElement | null = $state(null);
   let isPlaying = $state(false);
   let currentTime = $state(0);
-  let duration = $state(
-    durationMs && Number.isFinite(durationMs) && durationMs > 0 ? durationMs / 1000 : 0,
+  let audioDuration = $state(0);
+  let duration = $derived(
+    durationMs && Number.isFinite(durationMs) && durationMs > 0 ? durationMs / 1000 : audioDuration,
   );
-
-  $effect(() => {
-    if (durationMs && Number.isFinite(durationMs) && durationMs > 0) {
-      duration = durationMs / 1000;
-    }
-  });
 
   // Generate deterministic bar heights for visual waveform aesthetics
   const WAVE_BARS = [
@@ -45,8 +40,8 @@
     if (!audioElement) return;
     currentTime = audioElement.currentTime;
     const d = audioElement.duration;
-    if (Number.isFinite(d) && d > 0 && (!duration || duration <= 0)) {
-      duration = d;
+    if (Number.isFinite(d) && d > 0 && (!audioDuration || audioDuration <= 0)) {
+      audioDuration = d;
     }
   }
 
@@ -54,8 +49,8 @@
     if (!audioElement) return;
     const d = audioElement.duration;
     if (Number.isFinite(d) && d > 0) {
-      if (!duration || duration <= 0) {
-        duration = d;
+      if (!audioDuration || audioDuration <= 0) {
+        audioDuration = d;
       }
     } else if (d === Infinity) {
       // Chromium bug: MediaRecorder WebM blobs report Infinity duration until seeked.
@@ -63,7 +58,7 @@
         if (!audioElement) return;
         audioElement.removeEventListener('timeupdate', handleSeekFix);
         if (Number.isFinite(audioElement.duration) && audioElement.duration > 0) {
-          duration = audioElement.duration;
+          audioDuration = audioElement.duration;
         }
         audioElement.currentTime = 0;
       };
