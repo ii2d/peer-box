@@ -62,6 +62,10 @@ _Avoid_: Screenshot, screen share, stream
 Live measurement of transfer throughput (speed), estimated time remaining (ETA), and round-trip connection latency between peers.
 _Avoid_: Analytics, stats, monitoring
 
+**Room Notice**:
+An ephemeral inline marker displayed in the Timeline indicating room lifecycle events, such as a peer joining or leaving.
+_Avoid_: System alert, status notification, user banner, bot message
+
 ### Workspace & Layout
 
 **Roster**:
