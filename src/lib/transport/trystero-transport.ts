@@ -1,15 +1,24 @@
-import { joinRoom as joinNostrRoom } from 'trystero/nostr';
+import { joinRoom as joinNostrRoom } from 'trystero';
 import { generatePersona, type Persona } from '../persona/persona';
 import type { PeerConnectionStats, PeerInfo, RoomTransport, RoomTransportConfig } from './types';
 
 interface TrysteroAction {
   send: (data: unknown, options?: { target?: string } | string) => Promise<unknown> | void;
-  onMessage?: ((data: unknown, meta: { peerId: string }) => void) | null;
+  onMessage?:
+    | ((cb: (data: unknown, meta?: { peerId?: string }) => void) => () => void)
+    | ((data: unknown, meta: { peerId: string }) => void)
+    | unknown;
 }
 
 interface TrysteroRoom {
-  onPeerJoin?: ((peerId: string) => void) | null;
-  onPeerLeave?: ((peerId: string) => void) | null;
+  onPeerJoin?:
+    | ((handler: (context: { peerId: string } | string) => void) => () => void)
+    | ((peerId: string) => void)
+    | unknown;
+  onPeerLeave?:
+    | ((handler: (context: { peerId: string } | string) => void) => () => void)
+    | ((peerId: string) => void)
+    | unknown;
   makeAction: (
     name: string,
   ) =>
@@ -18,7 +27,7 @@ interface TrysteroRoom {
         (data: unknown, targetPeerId?: string) => void,
         (cb: (data: unknown, peerId: string) => void) => void,
       ];
-  getPeers?: () => Record<string, RTCPeerConnection>;
+  getPeers?: () => Record<string, RTCPeerConnection | { connection?: RTCPeerConnection | null }>;
   leave: () => Promise<void> | void;
 }
 
@@ -26,6 +35,40 @@ export interface TrysteroTransportOptions {
   appId?: string;
   joinRoomFn?: (config: { appId: string; password?: string }, roomId: string) => TrysteroRoom;
   persona?: Persona;
+}
+
+function subscribeOrAssign<T extends object, K extends keyof T>(
+  target: T,
+  prop: K,
+  handler: unknown,
+): (() => void) | null {
+  const desc = Object.getOwnPropertyDescriptor(target, prop);
+  if (desc && typeof desc.set === 'function') {
+    try {
+      (target as Record<K, unknown>)[prop] = handler;
+      return null;
+    } catch {
+      // Locked method in Trystero 0.27+
+      const fn = (target as Record<K, unknown>)[prop];
+      if (typeof fn === 'function') {
+        const unsub = (fn as (cb: unknown) => unknown)(handler);
+        return typeof unsub === 'function' ? (unsub as () => void) : null;
+      }
+    }
+  } else {
+    const fn = (target as Record<K, unknown>)[prop];
+    if (typeof fn === 'function') {
+      const unsub = (fn as (cb: unknown) => unknown)(handler);
+      return typeof unsub === 'function' ? (unsub as () => void) : null;
+    } else {
+      try {
+        (target as Record<K, unknown>)[prop] = handler;
+      } catch {
+        // Safe fallback
+      }
+    }
+  }
+  return null;
 }
 
 export class TrysteroTransport implements RoomTransport {
@@ -41,6 +84,9 @@ export class TrysteroTransport implements RoomTransport {
   private room: TrysteroRoom | null = null;
   private peers = new Map<string, PeerInfo>();
   private localPersona: Persona;
+
+  private unsubPeerJoin: (() => void) | null = null;
+  private unsubPeerLeave: (() => void) | null = null;
 
   private peerJoinListeners = new Set<(peer: PeerInfo) => void>();
   private peerLeaveListeners = new Set<(peerId: string) => void>();
@@ -74,7 +120,7 @@ export class TrysteroTransport implements RoomTransport {
   setPersona(persona: Persona): void {
     this.localPersona = persona;
     if (this._roomId) {
-      this.sendAction('peer-presence', {
+      void this.sendAction('peer-presence', {
         id: this.localPeerId,
         name: persona.name,
         color: persona.color,
@@ -115,12 +161,18 @@ export class TrysteroTransport implements RoomTransport {
       }
     });
 
-    const handlePeerJoin = (peerId: string) => {
+    const handlePeerJoin = (peerOrContext: unknown) => {
+      const peerId =
+        typeof peerOrContext === 'string'
+          ? peerOrContext
+          : (peerOrContext as { peerId?: string } | null | undefined)?.peerId;
+      if (!peerId) return;
+
       const peerInfo: PeerInfo = { id: peerId };
       this.peers.set(peerId, peerInfo);
 
       // Announce our presence to the newly joined peer
-      this.sendAction(
+      void this.sendAction(
         'peer-presence',
         {
           id: this.localPeerId,
@@ -136,37 +188,59 @@ export class TrysteroTransport implements RoomTransport {
       }
     };
 
-    const rawJoin = this.room.onPeerJoin as unknown;
-    if (typeof rawJoin === 'function' && (rawJoin as (...args: unknown[]) => unknown).length > 0) {
-      (rawJoin as (cb: (peerId: string) => void) => void)(handlePeerJoin);
-    } else {
-      this.room.onPeerJoin = handlePeerJoin;
-    }
+    this.unsubPeerJoin = subscribeOrAssign(this.room, 'onPeerJoin', handlePeerJoin);
 
-    const handlePeerLeave = (peerId: string) => {
+    const handlePeerLeave = (peerOrContext: unknown) => {
+      const peerId =
+        typeof peerOrContext === 'string'
+          ? peerOrContext
+          : (peerOrContext as { peerId?: string } | null | undefined)?.peerId;
+      if (!peerId) return;
+
       this.peers.delete(peerId);
       for (const listener of this.peerLeaveListeners) {
         listener(peerId);
       }
     };
 
-    const rawLeave = this.room.onPeerLeave as unknown;
-    if (
-      typeof rawLeave === 'function' &&
-      (rawLeave as (...args: unknown[]) => unknown).length > 0
-    ) {
-      (rawLeave as (cb: (peerId: string) => void) => void)(handlePeerLeave);
-    } else {
-      this.room.onPeerLeave = handlePeerLeave;
-    }
+    this.unsubPeerLeave = subscribeOrAssign(this.room, 'onPeerLeave', handlePeerLeave);
   }
 
   async leaveRoom(): Promise<void> {
+    if (this.unsubPeerJoin) {
+      try {
+        this.unsubPeerJoin();
+      } catch {
+        // Safe cleanup
+      }
+      this.unsubPeerJoin = null;
+    }
+    if (this.unsubPeerLeave) {
+      try {
+        this.unsubPeerLeave();
+      } catch {
+        // Safe cleanup
+      }
+      this.unsubPeerLeave = null;
+    }
+
     if (this.room) {
       const roomToLeave = this.room;
       this.room = null;
-      roomToLeave.onPeerJoin = null;
-      roomToLeave.onPeerLeave = null;
+      try {
+        if (typeof roomToLeave.onPeerJoin !== 'function') {
+          (roomToLeave as unknown as Record<string, unknown>).onPeerJoin = null;
+        }
+      } catch {
+        // Safe cleanup
+      }
+      try {
+        if (typeof roomToLeave.onPeerLeave !== 'function') {
+          (roomToLeave as unknown as Record<string, unknown>).onPeerLeave = null;
+        }
+      } catch {
+        // Safe cleanup
+      }
       try {
         const leaveResult = roomToLeave.leave();
         if (leaveResult && typeof (leaveResult as Promise<void>).then === 'function') {
@@ -221,12 +295,15 @@ export class TrysteroTransport implements RoomTransport {
             return rawAction.send(data);
           }
         };
-        rawAction.onMessage = (data: unknown, meta: { peerId: string }) => {
-          const senderId = meta?.peerId ?? '';
+
+        const handleIncoming = (data: unknown, meta?: { peerId?: string } | string) => {
+          const senderId = (typeof meta === 'string' ? meta : meta?.peerId) ?? '';
           for (const listener of listeners) {
             listener(data, senderId);
           }
         };
+
+        subscribeOrAssign(rawAction, 'onMessage', handleIncoming);
       }
 
       entry = { send: sendFn, listeners };
@@ -239,10 +316,14 @@ export class TrysteroTransport implements RoomTransport {
     const action = this.getOrCreateAction(actionName);
     if (!action) return;
 
-    if (targetPeerId) {
-      await action.send(payload, targetPeerId);
-    } else {
-      await action.send(payload);
+    try {
+      if (targetPeerId) {
+        await action.send(payload, targetPeerId);
+      } else {
+        await action.send(payload);
+      }
+    } catch {
+      // Safe fallback if target peer disconnected or send failed
     }
   }
 
@@ -260,8 +341,12 @@ export class TrysteroTransport implements RoomTransport {
   async getPeerStats(peerId: string): Promise<PeerConnectionStats | null> {
     if (!this.room) return null;
     try {
-      const rawPeers = this.room.getPeers?.() || {};
-      const pc = rawPeers[peerId];
+      const rawPeers = (this.room.getPeers?.() || {}) as Record<string, unknown>;
+      const rawPeer = rawPeers[peerId];
+      const pc = (rawPeer && typeof rawPeer === 'object' && 'connection' in rawPeer
+        ? (rawPeer as { connection?: RTCPeerConnection | null }).connection
+        : rawPeer) as RTCPeerConnection | null;
+
       if (pc && typeof pc.getStats === 'function') {
         const stats = await pc.getStats();
         let rtt = 20;

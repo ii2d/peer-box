@@ -66,7 +66,7 @@ describe('TrysteroTransport Adapter', () => {
     expect(leftPeers).toContain('peer-remote');
 
     // Leaving room
-    transport.leaveRoom();
+    await transport.leaveRoom();
     expect(mockRoom.leave).toHaveBeenCalled();
   });
 
@@ -113,14 +113,14 @@ describe('TrysteroTransport Adapter', () => {
     });
 
     // Send action broadcast
-    transport.sendAction('chat', { text: 'world' });
+    void transport.sendAction('chat', { text: 'world' });
     expect(sendMock).toHaveBeenCalledWith({ text: 'world' });
 
     // Send directed action
-    transport.sendAction('chat', { text: 'direct' }, 'peer-abc');
+    void transport.sendAction('chat', { text: 'direct' }, 'peer-abc');
     expect(sendMock).toHaveBeenCalledWith({ text: 'direct' }, { target: 'peer-abc' });
 
-    transport.leaveRoom();
+    await transport.leaveRoom();
   });
 
   it('awaits previous room leave and creates new room instance with updated password on key change', async () => {
@@ -141,7 +141,7 @@ describe('TrysteroTransport Adapter', () => {
       onPeerJoin: vi.fn(),
       onPeerLeave: vi.fn(),
       makeAction: vi.fn(() => ({ send: vi.fn(), onMessage: null })),
-      leave: vi.fn(),
+      leave: leaveMock1,
     };
 
     const joinRoomFn = vi.fn().mockReturnValueOnce(mockRoom1).mockReturnValueOnce(mockRoom2);
@@ -164,5 +164,81 @@ describe('TrysteroTransport Adapter', () => {
       { appId: 'test-app', password: 'key-2' },
       'test-room',
     );
+  });
+
+  it('correctly handles Trystero v0.27+ method-based event subscriptions and context objects', async () => {
+    let peerJoinHandler: ((ctx: { peerId: string; userId: string }) => void) | null = null;
+    let peerLeaveHandler: ((ctx: { peerId: string; userId: string }) => void) | null = null;
+    let messageHandler: ((data: unknown, meta: { peerId: string }) => void) | null = null;
+    const unsubJoinMock = vi.fn();
+    const unsubLeaveMock = vi.fn();
+    const sendMock = vi.fn();
+
+    const mockAction = {
+      send: sendMock,
+      onMessage: vi.fn((cb: (data: unknown, meta: { peerId: string }) => void) => {
+        messageHandler = cb;
+        return vi.fn();
+      }),
+    };
+
+    const mockRoom = {
+      onPeerJoin: vi.fn((cb: (ctx: { peerId: string; userId: string }) => void) => {
+        peerJoinHandler = cb;
+        return unsubJoinMock;
+      }),
+      onPeerLeave: vi.fn((cb: (ctx: { peerId: string; userId: string }) => void) => {
+        peerLeaveHandler = cb;
+        return unsubLeaveMock;
+      }),
+      makeAction: vi.fn(() => mockAction),
+      getPeers: vi.fn(() => ({
+        'peer-v27': {
+          userId: 'user-v27',
+          connection: {
+            getStats: vi.fn().mockResolvedValue(new Map()),
+          },
+        },
+      })),
+      leave: vi.fn(),
+    };
+
+    const transport = new TrysteroTransport({
+      joinRoomFn: vi.fn().mockReturnValue(mockRoom),
+    });
+
+    await transport.joinRoom({ roomId: 'test-v27' });
+
+    expect(mockRoom.onPeerJoin).toHaveBeenCalled();
+    expect(mockRoom.onPeerLeave).toHaveBeenCalled();
+
+    const joinedPeers: string[] = [];
+    transport.onPeerJoin((p) => joinedPeers.push(p.id));
+
+    // Simulate v0.27 peer join context object
+    peerJoinHandler!({ peerId: 'peer-v27', userId: 'user-v27' });
+    expect(joinedPeers).toContain('peer-v27');
+
+    // Verify peer stats extraction with v0.27 peer connection wrapper
+    const stats = await transport.getPeerStats('peer-v27');
+    expect(stats?.peerId).toBe('peer-v27');
+
+    // Simulate action message via v0.27 onMessage handler
+    const received: unknown[] = [];
+    transport.onAction('ping', (data) => received.push(data));
+    expect(messageHandler).not.toBeNull();
+    messageHandler!('pong', { peerId: 'peer-v27' });
+    expect(received).toEqual(['pong']);
+
+    // Simulate v0.27 peer leave context object
+    const leftPeers: string[] = [];
+    transport.onPeerLeave((id) => leftPeers.push(id));
+    peerLeaveHandler!({ peerId: 'peer-v27', userId: 'user-v27' });
+    expect(leftPeers).toContain('peer-v27');
+
+    await transport.leaveRoom();
+    expect(unsubJoinMock).toHaveBeenCalled();
+    expect(unsubLeaveMock).toHaveBeenCalled();
+    expect(mockRoom.leave).toHaveBeenCalled();
   });
 });
